@@ -6,6 +6,7 @@ Hệ Thống Đăng Ký Mô Hình là một giải pháp cơ sở dữ liệu to
 
 ## Cấu trúc thư mục
 
+```
 model-registry/
 ├── README.md                             # Tài liệu tổng quan về dự án
 ├── database/                             # Thư mục chứa tất cả các script SQL
@@ -87,6 +88,7 @@ model-registry/
     ├── deploy.sh                         # Script triển khai cho Linux/Unix
     ├── install_all.sql                   # Script cài đặt tất cả
     └── uninstall.sql                     # Script gỡ bỏ
+```
 
 ## Tính Năng Chính
 
