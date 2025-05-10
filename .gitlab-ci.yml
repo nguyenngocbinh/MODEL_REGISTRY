@@ -1,0 +1,32 @@
+stages:
+  - deploy
+
+deploy_master_to_github_dev:
+  stage: deploy
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache git
+    - git config --global user.email "nguyenngocbinhneu@gmail.com"
+    - git config --global user.name "Nguyen Ngoc Binh"
+  script:
+    - echo "Cloning repository..."
+    - git clone https://oauth2:$GITLAB_PERSONAL_ACCESS_TOKEN@gitlab.com/nguyenngocbinh/MODEL_REGISTRY.git || (echo "Clone failed"; exit 1)
+    - cd MODEL_REGISTRY
+    
+    # Ensure we're on the master branch
+    - git checkout master || (echo "Failed to checkout master branch"; exit 1)
+    
+    # Add GitHub as a remote repository
+    - echo "Adding GitHub remote..."
+    - git remote add github https://$GITHUB_TOKEN@github.com/nguyenngocbinh/MODEL_REGISTRY.git
+    
+    # Fetch from GitHub to update remote refs
+    - git fetch github
+    
+    # Force push the master branch from GitLab to dev branch on GitHub
+    - echo "Pushing GitLab master branch to GitHub dev branch..."
+    - git push -f github master:dev || (echo "Push failed"; exit 1)
+    
+    - echo "Successfully pushed GitLab master branch to GitHub dev branch"
+  only:
+    - master  # This job will run only when changes are pushed to the master branch

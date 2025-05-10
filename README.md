@@ -4,6 +4,92 @@
 
 Hệ Thống Đăng Ký Mô Hình là một giải pháp cơ sở dữ liệu toàn diện để quản lý và theo dõi các mô hình đánh giá rủi ro tín dụng, các nguồn dữ liệu phụ thuộc và tham số thực thi của chúng. Hệ thống này giúp duy trì tài liệu rõ ràng về tất cả các mô hình, bảng dữ liệu đầu vào và đầu ra, cũng như mối quan hệ giữa các thành phần khác nhau trong hệ sinh thái mô hình.
 
+## Cấu trúc thư mục
+
+```
+model-registry/
+├── README.md                             # Tài liệu tổng quan về dự án
+├── database/                             # Thư mục chứa tất cả các script SQL
+│   ├── schema/                           # Định nghĩa cấu trúc cơ sở dữ liệu
+│   │   ├── 01_model_type.sql             # Tạo bảng MODEL_TYPE
+│   │   ├── 02_model_registry.sql         # Tạo bảng MODEL_REGISTRY
+│   │   ├── 03_model_parameters.sql       # Tạo bảng MODEL_PARAMETERS
+│   │   ├── 04_model_source_tables.sql    # Tạo bảng MODEL_SOURCE_TABLES
+│   │   ├── 05_model_column_details.sql   # Tạo bảng MODEL_COLUMN_DETAILS
+│   │   ├── 06_model_table_usage.sql      # Tạo bảng MODEL_TABLE_USAGE
+│   │   ├── 07_model_table_mapping.sql    # Tạo bảng MODEL_TABLE_MAPPING
+│   │   ├── 08_model_segment_mapping.sql  # Tạo bảng MODEL_SEGMENT_MAPPING
+│   │   ├── 09_model_validation_results.sql # Tạo bảng MODEL_VALIDATION_RESULTS
+│   │   ├── 10_model_source_refresh_log.sql # Tạo bảng MODEL_SOURCE_REFRESH_LOG
+│   │   └── 11_model_data_quality_log.sql # Tạo bảng MODEL_DATA_QUALITY_LOG
+│   │
+│   ├── views/                            # View SQL
+│   │   ├── 01_vw_model_table_relationships.sql
+│   │   ├── 02_vw_model_type_info.sql
+│   │   └── 03_vw_model_performance.sql
+│   │
+│   ├── procedures/                       # Stored Procedures
+│   │   ├── 01_get_model_tables.sql
+│   │   ├── 02_get_table_models.sql
+│   │   ├── 03_validate_model_sources.sql
+│   │   ├── 04_log_source_table_refresh.sql
+│   │   ├── 05_get_appropriate_model.sql
+│   │   └── 06_get_model_performance_history.sql
+│   │
+│   ├── functions/                        # Scalar và Table-Valued Functions
+│   │   ├── 01_fn_get_model_score.sql
+│   │   └── 02_fn_calculate_psi.sql
+│   │
+│   ├── triggers/                         # Triggers
+│   │   ├── 01_trg_audit_model_registry.sql
+│   │   └── 02_trg_audit_model_parameters.sql
+│   │
+│   ├── sample_data/                      # Script nhập dữ liệu mẫu
+│   │   ├── 01_model_type_data.sql
+│   │   ├── 02_model_registry_data.sql
+│   │   ├── 03_model_parameters_data.sql
+│   │   ├── 04_model_source_tables_data.sql
+│   │   ├── 05_model_table_usage_data.sql
+│   │   └── 06_model_validation_results_data.sql
+│   │
+│   └── migrations/                       # Script nâng cấp schema
+│       ├── v1.0-to-v1.1/
+│       │   ├── 01_add_column_model_registry.sql
+│       │   └── 02_update_view_model_type_info.sql
+│       └── v1.1-to-v1.2/
+│           └── 01_add_model_validation_results.sql
+│
+├── docs/                                 # Tài liệu
+│   ├── diagrams/                         # Các sơ đồ
+│   │   ├── er_diagram.png
+│   │   └── architecture_diagram.png
+│   │
+│   ├── user_guide.md                     # Hướng dẫn sử dụng
+│   ├── admin_guide.md                    # Hướng dẫn quản trị
+│   ├── implementation_guide.md           # Hướng dẫn triển khai
+│   └── api_documentation.md              # Tài liệu API
+│
+├── tests/                                # Kiểm thử
+│   ├── unit_tests/                       # Kiểm thử đơn vị
+│   │   ├── test_model_registry.sql
+│   │   └── test_model_validation.sql
+│   │
+│   └── integration_tests/                # Kiểm thử tích hợp
+│       ├── test_procedures.sql
+│       └── test_views.sql
+│
+├── reports/                              # Mẫu báo cáo
+│   ├── model_inventory_report.sql
+│   ├── model_performance_report.sql
+│   └── data_quality_report.sql
+│
+└── scripts/                              # Scripts hỗ trợ
+    ├── deploy.bat                        # Script triển khai cho Windows
+    ├── deploy.sh                         # Script triển khai cho Linux/Unix
+    ├── install_all.sql                   # Script cài đặt tất cả
+    └── uninstall.sql                     # Script gỡ bỏ
+```
+
 ## Tính Năng Chính
 
 - Đăng ký tập trung tất cả các mô hình rủi ro với quản lý phiên bản
@@ -189,3 +275,11 @@ Hệ thống cung cấp các báo cáo tích hợp để hỗ trợ quản trị
 3. **Báo Cáo Phụ Thuộc Dữ Liệu**: Hiển thị mối quan hệ giữa các mô hình và nguồn dữ liệu
 4. **Báo Cáo Đánh Giá Chất Lượng**: Phân tích các vấn đề chất lượng dữ liệu ảnh hưởng đến mô hình
 5. **Báo Cáo Tuân Thủ**: Hỗ trợ các yêu cầu tuân thủ quy định về quản trị mô hình
+
+## Tác Giả
+
+Nguyễn Ngọc Bình
+
+## Giấy Phép
+
+© 2025 - Bản quyền thuộc về Nguyễn Ngọc Bình
