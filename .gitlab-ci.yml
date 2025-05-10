@@ -1,7 +1,7 @@
 stages:
   - deploy
 
-deploy_main_to_github_dev:
+deploy_master_to_github_dev:
   stage: deploy
   image: alpine:latest
   before_script:
@@ -13,8 +13,8 @@ deploy_main_to_github_dev:
     - git clone https://oauth2:$GITLAB_PERSONAL_ACCESS_TOKEN@gitlab.com/nguyenngocbinh/MODEL_REGISTRY.git || (echo "Clone failed"; exit 1)
     - cd MODEL_REGISTRY
     
-    # Ensure we're on the main branch
-    - git checkout main || (echo "Failed to checkout main branch"; exit 1)
+    # Ensure we're on the master branch
+    - git checkout master || (echo "Failed to checkout master branch"; exit 1)
     
     # Add GitHub as a remote repository
     - echo "Adding GitHub remote..."
@@ -23,10 +23,10 @@ deploy_main_to_github_dev:
     # Fetch from GitHub to update remote refs
     - git fetch github
     
-    # Force push the main branch from GitLab to dev branch on GitHub
-    - echo "Pushing GitLab main branch to GitHub dev branch..."
-    - git push -f github main:dev || (echo "Push failed"; exit 1)
+    # Force push the master branch from GitLab to dev branch on GitHub
+    - echo "Pushing GitLab master branch to GitHub dev branch..."
+    - git push -f github master:dev || (echo "Push failed"; exit 1)
     
-    - echo "Successfully pushed GitLab main branch to GitHub dev branch"
+    - echo "Successfully pushed GitLab master branch to GitHub dev branch"
   only:
-    - main  # This job will run only when changes are pushed to the main branch
+    - master  # This job will run only when changes are pushed to the master branch
