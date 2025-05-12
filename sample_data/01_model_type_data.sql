@@ -22,13 +22,13 @@ VALUES
 
 ('EAD', 'Exposure at Default', N'Mô hình ước tính giá trị rủi ro tại thời điểm vỡ nợ. Đo lường dư nợ thực tế của khách hàng khi xảy ra sự kiện vỡ nợ.'),
 
-('BSCORE', 'Behavioral Scorecard', N'Thẻ điểm đánh giá hành vi khách hàng dựa trên các biến hành vi. Thường được sử dụng để đánh giá khách hàng hiện hữu dựa trên lịch sử giao dịch và thanh toán.'),
+('B-SCORE', 'Behavioral Scorecard', N'Thẻ điểm đánh giá hành vi khách hàng dựa trên các biến hành vi. Thường được sử dụng để đánh giá khách hàng hiện hữu dựa trên lịch sử giao dịch và thanh toán.'),
 
-('APP_SCORE', 'Application Scorecard', N'Thẻ điểm đánh giá khách hàng tại thời điểm đăng ký. Được sử dụng trong quy trình phê duyệt khoản vay mới dựa trên thông tin đăng ký và thông tin bên ngoài.'),
+('A-SCORE', 'Application Scorecard', N'Thẻ điểm đánh giá khách hàng tại thời điểm đăng ký. Được sử dụng trong quy trình phê duyệt khoản vay mới dựa trên thông tin đăng ký và thông tin bên ngoài.'),
 
 ('SEGMENT', 'Segmentation Model', N'Mô hình phân khúc khách hàng thành các nhóm đồng nhất. Giúp phân loại khách hàng theo tính chất rủi ro hoặc hành vi tương đồng.'),
 
-('COLL_SCORE', 'Collection Scorecard', N'Thẻ điểm đánh giá khả năng thu hồi nợ. Dùng để phân loại khách hàng quá hạn và xác định chiến lược thu hồi nợ phù hợp.'),
+('C-SCORE', 'Collection Scorecard', N'Thẻ điểm đánh giá khả năng thu hồi nợ. Dùng để phân loại khách hàng quá hạn và xác định chiến lược thu hồi nợ phù hợp.'),
 
 ('EARLY_WARN', 'Early Warning Signal', N'Mô hình cảnh báo sớm về khả năng vỡ nợ. Phát hiện các dấu hiệu suy giảm chất lượng tín dụng trước khi khách hàng thực sự vỡ nợ.'),
 
@@ -42,18 +42,4 @@ VALUES
 GO
 
 PRINT 'Đã nhập dữ liệu mẫu cho bảng MODEL_TYPE thành công.';
-GOến lược thu hồi nợ phù hợp.'),
-
-('EARLY_WARN', 'Early Warning Signal', N'Mô hình cảnh báo sớm về khả năng vỡ nợ. Phát hiện các dấu hiệu suy giảm chất lượng tín dụng trước khi khách hàng thực sự vỡ nợ.'),
-
-('LIMIT', 'Limit Setting Model', N'Mô hình thiết lập hạn mức tín dụng. Xác định hạn mức phù hợp dựa trên đặc điểm và khả năng trả nợ của khách hàng.'),
-
-('STRESS', 'Stress Testing Model', N'Mô hình kiểm tra căng thẳng. Đánh giá ảnh hưởng của các kịch bản bất lợi đến danh mục tín dụng.'),
-
-('PRICING', 'Risk-based Pricing', N'Mô hình định giá dựa trên rủi ro. Xác định lãi suất phù hợp dựa trên mức độ rủi ro của khách hàng.'),
-
-('FRAUD', 'Fraud Detection', N'Mô hình phát hiện gian lận. Xác định các giao dịch hoặc đơn đăng ký có khả năng gian lận cao.');
-GO
-
-PRINT 'Đã nhập dữ liệu mẫu cho bảng MODEL_TYPE thành công.';
-GO
+GO 

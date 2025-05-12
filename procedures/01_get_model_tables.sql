@@ -136,7 +136,10 @@ BEGIN
     AND cd.IS_FEATURE = 1 -- Chỉ lấy các cột là đặc trưng của mô hình
     AND (@INCLUDE_INACTIVE = 1 OR tu.IS_ACTIVE = 1)
     AND @AS_OF_DATE BETWEEN tu.EFF_DATE AND tu.EXP_DATE
-    ORDER BY st.SOURCE_TABLE_NAME, cd.FEATURE_IMPORTANCE DESC NULLS LAST, cd.COLUMN_NAME;
+    ORDER BY st.SOURCE_TABLE_NAME, 
+        CASE WHEN cd.FEATURE_IMPORTANCE IS NULL THEN 0 ELSE 1 END DESC, 
+        cd.FEATURE_IMPORTANCE DESC, 
+        cd.COLUMN_NAME;
     
     -- Lấy thông tin về các vấn đề chất lượng dữ liệu gần đây
     SELECT TOP 10

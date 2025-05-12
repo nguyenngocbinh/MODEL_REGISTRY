@@ -3,7 +3,7 @@ Tên file: 09_model_validation_results.sql
 Mô tả: Tạo bảng MODEL_VALIDATION_RESULTS để lưu trữ các kết quả đánh giá hiệu suất mô hình
 Tác giả: Nguyễn Ngọc Bình
 Ngày tạo: 2025-05-10
-Phiên bản: 1.1 - Cập nhật thêm trường KAPPA và các chỉ số khác theo yêu cầu
+Phiên bản: 1.2 - Cập nhật thêm điều chỉnh loại bỏ AUC_ROC, cập nhật ngưỡng GINI và sử dụng chỉ KAPPA
 */
 
 -- Kiểm tra nếu bảng đã tồn tại thì xóa
@@ -20,9 +20,10 @@ CREATE TABLE MODEL_REGISTRY.dbo.MODEL_VALIDATION_RESULTS (
     VALIDATION_PERIOD NVARCHAR(100) NULL, -- e.g., 'JAN2023-JUN2023'
     DATA_SAMPLE_SIZE INT NULL, -- Số lượng mẫu dữ liệu sử dụng trong đánh giá
     DATA_SAMPLE_DESCRIPTION NVARCHAR(255) NULL,
+    MODEL_SUBTYPE NVARCHAR(50) NULL, -- 'Retail AScore (without Bureau)', 'Retail AScore (with Bureau)', 'Retail BScore', 'Wholesale Scorecard'
     
     -- Chỉ số đánh giá mô hình phân loại
-    AUC_ROC FLOAT NULL,
+    -- AUC_ROC đã được loại bỏ
     KS_STATISTIC FLOAT NULL,
     GINI FLOAT NULL,
     ACCURACY FLOAT NULL,
@@ -30,7 +31,7 @@ CREATE TABLE MODEL_REGISTRY.dbo.MODEL_VALIDATION_RESULTS (
     RECALL FLOAT NULL,
     F1_SCORE FLOAT NULL,
     IV FLOAT NULL, -- Information Value
-    KAPPA FLOAT NULL, -- Thêm chỉ số Kappa
+    KAPPA FLOAT NULL, -- Kappa coefficient
     
     -- Chỉ số đánh giá mô hình dự báo xác suất
     BRIER_SCORE FLOAT NULL,
@@ -41,12 +42,14 @@ CREATE TABLE MODEL_REGISTRY.dbo.MODEL_VALIDATION_RESULTS (
     CSI FLOAT NULL, -- Characteristic Stability Index
     
     -- Chỉ số đánh giá theo ngưỡng
-    AUC_THRESHOLD_RED FLOAT DEFAULT 0.6,
-    AUC_THRESHOLD_AMBER FLOAT DEFAULT 0.7,
+    -- AUC_THRESHOLD_RED và AUC_THRESHOLD_AMBER đã được loại bỏ
     KS_THRESHOLD_RED FLOAT DEFAULT 0.2,
     KS_THRESHOLD_AMBER FLOAT DEFAULT 0.3,
+    
+    -- Ngưỡng GINI được mặc định theo model_subtype
     GINI_THRESHOLD_RED FLOAT DEFAULT 0.2,
-    GINI_THRESHOLD_AMBER FLOAT DEFAULT 0.4,
+    GINI_THRESHOLD_AMBER FLOAT DEFAULT 0.25,
+    
     PSI_THRESHOLD_RED FLOAT DEFAULT 0.25,
     PSI_THRESHOLD_AMBER FLOAT DEFAULT 0.1,
     IV_THRESHOLD_RED FLOAT DEFAULT 0.02,
@@ -121,10 +124,10 @@ EXEC sys.sp_addextendedproperty @name = N'MS_Description',
 GO
 
 EXEC sys.sp_addextendedproperty @name = N'MS_Description', 
-    @value = N'Diện tích dưới đường cong ROC (0-1, càng cao càng tốt)', 
+    @value = N'Phân loại mô hình con: Retail AScore (with/without Bureau), Retail BScore, Wholesale Scorecard', 
     @level0type = N'SCHEMA', @level0name = N'dbo', 
     @level1type = N'TABLE',  @level1name = N'MODEL_VALIDATION_RESULTS',
-    @level2type = N'COLUMN', @level2name = N'AUC_ROC';
+    @level2type = N'COLUMN', @level2name = N'MODEL_SUBTYPE';
 GO
 
 EXEC sys.sp_addextendedproperty @name = N'MS_Description', 
@@ -163,17 +166,17 @@ EXEC sys.sp_addextendedproperty @name = N'MS_Description',
 GO
 
 EXEC sys.sp_addextendedproperty @name = N'MS_Description', 
-    @value = N'Ngưỡng đỏ cho AUC-ROC, AUC < giá trị này sẽ được đánh giá là Red', 
+    @value = N'Ngưỡng đỏ cho GINI, GINI < giá trị này sẽ được đánh giá là Red', 
     @level0type = N'SCHEMA', @level0name = N'dbo', 
     @level1type = N'TABLE',  @level1name = N'MODEL_VALIDATION_RESULTS',
-    @level2type = N'COLUMN', @level2name = N'AUC_THRESHOLD_RED';
+    @level2type = N'COLUMN', @level2name = N'GINI_THRESHOLD_RED';
 GO
 
 EXEC sys.sp_addextendedproperty @name = N'MS_Description', 
-    @value = N'Ngưỡng vàng cho AUC-ROC, AUC ≥ giá trị này sẽ được đánh giá là Green', 
+    @value = N'Ngưỡng vàng cho GINI, GINI ≥ giá trị này sẽ được đánh giá là Green', 
     @level0type = N'SCHEMA', @level0name = N'dbo', 
     @level1type = N'TABLE',  @level1name = N'MODEL_VALIDATION_RESULTS',
-    @level2type = N'COLUMN', @level2name = N'AUC_THRESHOLD_AMBER';
+    @level2type = N'COLUMN', @level2name = N'GINI_THRESHOLD_AMBER';
 GO
 
 EXEC sys.sp_addextendedproperty @name = N'MS_Description', 
@@ -218,12 +221,11 @@ BEGIN
     CREATE TABLE #ModelEvaluation (
         VALIDATION_ID INT,
         VALIDATION_DATE DATE,
-        AUC_ROC FLOAT,
-        AUC_RATING NVARCHAR(10),
-        KS_STATISTIC FLOAT,
-        KS_RATING NVARCHAR(10),
+        MODEL_SUBTYPE NVARCHAR(50),
         GINI FLOAT,
         GINI_RATING NVARCHAR(10),
+        KS_STATISTIC FLOAT,
+        KS_RATING NVARCHAR(10),
         PSI FLOAT,
         PSI_RATING NVARCHAR(10),
         IV FLOAT,
@@ -236,88 +238,129 @@ BEGIN
         GREEN_COUNT INT
     );
     
-    -- Lấy kết quả đánh giá và tính toán đánh giá theo các ngưỡng
-    INSERT INTO #ModelEvaluation
+    -- Lấy kết quả đánh giá
+    INSERT INTO #ModelEvaluation (
+        VALIDATION_ID,
+        VALIDATION_DATE,
+        MODEL_SUBTYPE,
+        GINI,
+        KS_STATISTIC,
+        PSI,
+        IV,
+        KAPPA,
+        RED_COUNT,
+        AMBER_COUNT,
+        GREEN_COUNT,
+        OVERALL_RATING
+    )
     SELECT 
         mvr.VALIDATION_ID,
         mvr.VALIDATION_DATE,
-        mvr.AUC_ROC,
-        CASE 
-            WHEN mvr.AUC_ROC < mvr.AUC_THRESHOLD_RED THEN 'RED'
-            WHEN mvr.AUC_ROC >= mvr.AUC_THRESHOLD_RED AND mvr.AUC_ROC < mvr.AUC_THRESHOLD_AMBER THEN 'AMBER'
-            WHEN mvr.AUC_ROC >= mvr.AUC_THRESHOLD_AMBER THEN 'GREEN'
-            ELSE 'N/A'
-        END AS AUC_RATING,
-        
-        mvr.KS_STATISTIC,
-        CASE 
-            WHEN mvr.KS_STATISTIC < mvr.KS_THRESHOLD_RED THEN 'RED'
-            WHEN mvr.KS_STATISTIC >= mvr.KS_THRESHOLD_RED AND mvr.KS_STATISTIC < mvr.KS_THRESHOLD_AMBER THEN 'AMBER'
-            WHEN mvr.KS_STATISTIC >= mvr.KS_THRESHOLD_AMBER THEN 'GREEN'
-            ELSE 'N/A'
-        END AS KS_RATING,
-        
+        mvr.MODEL_SUBTYPE,
         mvr.GINI,
-        CASE 
-            WHEN mvr.GINI < mvr.GINI_THRESHOLD_RED THEN 'RED'
-            WHEN mvr.GINI >= mvr.GINI_THRESHOLD_RED AND mvr.GINI < mvr.GINI_THRESHOLD_AMBER THEN 'AMBER'
-            WHEN mvr.GINI >= mvr.GINI_THRESHOLD_AMBER THEN 'GREEN'
-            ELSE 'N/A'
-        END AS GINI_RATING,
-        
+        mvr.KS_STATISTIC,
         mvr.PSI,
-        CASE 
-            WHEN mvr.PSI > mvr.PSI_THRESHOLD_RED THEN 'RED'
-            WHEN mvr.PSI <= mvr.PSI_THRESHOLD_RED AND mvr.PSI >= mvr.PSI_THRESHOLD_AMBER THEN 'AMBER'
-            WHEN mvr.PSI < mvr.PSI_THRESHOLD_AMBER THEN 'GREEN'
-            ELSE 'N/A'
-        END AS PSI_RATING,
-        
         mvr.IV,
-        CASE 
-            WHEN mvr.IV < mvr.IV_THRESHOLD_RED THEN 'RED'
-            WHEN mvr.IV >= mvr.IV_THRESHOLD_RED AND mvr.IV < mvr.IV_THRESHOLD_AMBER THEN 'AMBER'
-            WHEN mvr.IV >= mvr.IV_THRESHOLD_AMBER THEN 'GREEN'
-            ELSE 'N/A'
-        END AS IV_RATING,
-        
-        ISNULL(mvr.KAPPA, mvr.F1_SCORE) AS KAPPA,
-        CASE 
-            WHEN ISNULL(mvr.KAPPA, mvr.F1_SCORE) < mvr.KAPPA_THRESHOLD_RED THEN 'RED'
-            WHEN ISNULL(mvr.KAPPA, mvr.F1_SCORE) >= mvr.KAPPA_THRESHOLD_RED AND ISNULL(mvr.KAPPA, mvr.F1_SCORE) < mvr.KAPPA_THRESHOLD_AMBER THEN 'AMBER'
-            WHEN ISNULL(mvr.KAPPA, mvr.F1_SCORE) >= mvr.KAPPA_THRESHOLD_AMBER THEN 'GREEN'
-            ELSE 'N/A'
-        END AS KAPPA_RATING,
-        
-        -- Sẽ được cập nhật sau
-        'PENDING' AS OVERALL_RATING,
-        
-        -- Đếm số lượng đánh giá Red
-        CASE WHEN mvr.AUC_ROC < mvr.AUC_THRESHOLD_RED THEN 1 ELSE 0 END +
-        CASE WHEN mvr.KS_STATISTIC < mvr.KS_THRESHOLD_RED THEN 1 ELSE 0 END +
-        CASE WHEN mvr.GINI < mvr.GINI_THRESHOLD_RED THEN 1 ELSE 0 END +
-        CASE WHEN mvr.PSI > mvr.PSI_THRESHOLD_RED THEN 1 ELSE 0 END +
-        CASE WHEN mvr.IV < mvr.IV_THRESHOLD_RED THEN 1 ELSE 0 END +
-        CASE WHEN ISNULL(mvr.KAPPA, mvr.F1_SCORE) < mvr.KAPPA_THRESHOLD_RED THEN 1 ELSE 0 END AS RED_COUNT,
-        
-        -- Đếm số lượng đánh giá Amber
-        CASE WHEN mvr.AUC_ROC >= mvr.AUC_THRESHOLD_RED AND mvr.AUC_ROC < mvr.AUC_THRESHOLD_AMBER THEN 1 ELSE 0 END +
-        CASE WHEN mvr.KS_STATISTIC >= mvr.KS_THRESHOLD_RED AND mvr.KS_STATISTIC < mvr.KS_THRESHOLD_AMBER THEN 1 ELSE 0 END +
-        CASE WHEN mvr.GINI >= mvr.GINI_THRESHOLD_RED AND mvr.GINI < mvr.GINI_THRESHOLD_AMBER THEN 1 ELSE 0 END +
-        CASE WHEN mvr.PSI <= mvr.PSI_THRESHOLD_RED AND mvr.PSI >= mvr.PSI_THRESHOLD_AMBER THEN 1 ELSE 0 END +
-        CASE WHEN mvr.IV >= mvr.IV_THRESHOLD_RED AND mvr.IV < mvr.IV_THRESHOLD_AMBER THEN 1 ELSE 0 END +
-        CASE WHEN ISNULL(mvr.KAPPA, mvr.F1_SCORE) >= mvr.KAPPA_THRESHOLD_RED AND ISNULL(mvr.KAPPA, mvr.F1_SCORE) < mvr.KAPPA_THRESHOLD_AMBER THEN 1 ELSE 0 END AS AMBER_COUNT,
-        
-        -- Đếm số lượng đánh giá Green
-        CASE WHEN mvr.AUC_ROC >= mvr.AUC_THRESHOLD_AMBER THEN 1 ELSE 0 END +
-        CASE WHEN mvr.KS_STATISTIC >= mvr.KS_THRESHOLD_AMBER THEN 1 ELSE 0 END +
-        CASE WHEN mvr.GINI >= mvr.GINI_THRESHOLD_AMBER THEN 1 ELSE 0 END +
-        CASE WHEN mvr.PSI < mvr.PSI_THRESHOLD_AMBER THEN 1 ELSE 0 END +
-        CASE WHEN mvr.IV >= mvr.IV_THRESHOLD_AMBER THEN 1 ELSE 0 END +
-        CASE WHEN ISNULL(mvr.KAPPA, mvr.F1_SCORE) >= mvr.KAPPA_THRESHOLD_AMBER THEN 1 ELSE 0 END AS GREEN_COUNT
+        mvr.KAPPA, -- Sử dụng trực tiếp KAPPA, không sử dụng F1_SCORE
+        0, -- Sẽ được cập nhật sau
+        0, -- Sẽ được cập nhật sau
+        0, -- Sẽ được cập nhật sau
+        'PENDING' -- Sẽ được cập nhật sau
     FROM MODEL_REGISTRY.dbo.MODEL_VALIDATION_RESULTS mvr
     WHERE mvr.MODEL_ID = @MODEL_ID
     AND (@VALIDATION_ID IS NULL OR mvr.VALIDATION_ID = @VALIDATION_ID);
+    
+    -- Cập nhật ngưỡng GINI dựa trên MODEL_SUBTYPE
+    UPDATE #ModelEvaluation
+    SET 
+        GINI_RATING = 
+            CASE 
+                WHEN MODEL_SUBTYPE = 'Retail AScore (without Bureau)' THEN
+                    CASE 
+                        WHEN GINI < 0.20 THEN 'RED'
+                        WHEN GINI >= 0.20 AND GINI < 0.25 THEN 'AMBER'
+                        WHEN GINI >= 0.25 THEN 'GREEN'
+                        ELSE 'N/A'
+                    END
+                WHEN MODEL_SUBTYPE = 'Retail AScore (with Bureau)' THEN
+                    CASE 
+                        WHEN GINI < 0.25 THEN 'RED'
+                        WHEN GINI >= 0.25 AND GINI < 0.45 THEN 'AMBER'
+                        WHEN GINI >= 0.45 THEN 'GREEN'
+                        ELSE 'N/A'
+                    END
+                WHEN MODEL_SUBTYPE = 'Retail BScore' THEN
+                    CASE 
+                        WHEN GINI < 0.35 THEN 'RED'
+                        WHEN GINI >= 0.35 AND GINI < 0.45 THEN 'AMBER'
+                        WHEN GINI >= 0.45 THEN 'GREEN'
+                        ELSE 'N/A'
+                    END
+                WHEN MODEL_SUBTYPE = 'Wholesale Scorecard' THEN
+                    CASE 
+                        WHEN GINI < 0.40 THEN 'RED'
+                        WHEN GINI >= 0.40 AND GINI < 0.50 THEN 'AMBER'
+                        WHEN GINI >= 0.50 THEN 'GREEN'
+                        ELSE 'N/A'
+                    END
+                ELSE -- Default case
+                    CASE 
+                        WHEN GINI < 0.25 THEN 'RED'
+                        WHEN GINI >= 0.25 AND GINI < 0.35 THEN 'AMBER'
+                        WHEN GINI >= 0.35 THEN 'GREEN'
+                        ELSE 'N/A'
+                    END
+            END,
+        KS_RATING = 
+            CASE 
+                WHEN KS_STATISTIC < 0.2 THEN 'RED'
+                WHEN KS_STATISTIC >= 0.2 AND KS_STATISTIC < 0.3 THEN 'AMBER'
+                WHEN KS_STATISTIC >= 0.3 THEN 'GREEN'
+                ELSE 'N/A'
+            END,
+        PSI_RATING = 
+            CASE 
+                WHEN PSI > 0.25 THEN 'RED'
+                WHEN PSI <= 0.25 AND PSI >= 0.1 THEN 'AMBER'
+                WHEN PSI < 0.1 THEN 'GREEN'
+                ELSE 'N/A'
+            END,
+        IV_RATING = 
+            CASE 
+                WHEN IV < 0.02 THEN 'RED'
+                WHEN IV >= 0.02 AND IV < 0.1 THEN 'AMBER'
+                WHEN IV >= 0.1 THEN 'GREEN'
+                ELSE 'N/A'
+            END,
+        KAPPA_RATING = 
+            CASE 
+                WHEN KAPPA < 0.2 THEN 'RED'
+                WHEN KAPPA >= 0.2 AND KAPPA < 0.6 THEN 'AMBER'
+                WHEN KAPPA >= 0.6 THEN 'GREEN'
+                ELSE 'N/A'
+            END;
+    
+    -- Đếm số lượng đánh giá theo mức
+    UPDATE #ModelEvaluation
+    SET 
+        RED_COUNT = 
+            CASE WHEN GINI_RATING = 'RED' THEN 1 ELSE 0 END +
+            CASE WHEN KS_RATING = 'RED' THEN 1 ELSE 0 END +
+            CASE WHEN PSI_RATING = 'RED' THEN 1 ELSE 0 END +
+            CASE WHEN IV_RATING = 'RED' THEN 1 ELSE 0 END +
+            CASE WHEN KAPPA_RATING = 'RED' THEN 1 ELSE 0 END,
+        AMBER_COUNT = 
+            CASE WHEN GINI_RATING = 'AMBER' THEN 1 ELSE 0 END +
+            CASE WHEN KS_RATING = 'AMBER' THEN 1 ELSE 0 END +
+            CASE WHEN PSI_RATING = 'AMBER' THEN 1 ELSE 0 END +
+            CASE WHEN IV_RATING = 'AMBER' THEN 1 ELSE 0 END +
+            CASE WHEN KAPPA_RATING = 'AMBER' THEN 1 ELSE 0 END,
+        GREEN_COUNT = 
+            CASE WHEN GINI_RATING = 'GREEN' THEN 1 ELSE 0 END +
+            CASE WHEN KS_RATING = 'GREEN' THEN 1 ELSE 0 END +
+            CASE WHEN PSI_RATING = 'GREEN' THEN 1 ELSE 0 END +
+            CASE WHEN IV_RATING = 'GREEN' THEN 1 ELSE 0 END +
+            CASE WHEN KAPPA_RATING = 'GREEN' THEN 1 ELSE 0 END;
     
     -- Cập nhật đánh giá tổng thể dựa trên quy tắc mới
     UPDATE #ModelEvaluation
@@ -335,12 +378,11 @@ BEGIN
         @MODEL_VERSION AS MODEL_VERSION,
         me.VALIDATION_ID,
         me.VALIDATION_DATE,
-        me.AUC_ROC,
-        me.AUC_RATING,
-        me.KS_STATISTIC,
-        me.KS_RATING,
+        me.MODEL_SUBTYPE,
         me.GINI,
         me.GINI_RATING,
+        me.KS_STATISTIC,
+        me.KS_RATING,
         me.PSI,
         me.PSI_RATING,
         me.IV,
@@ -376,5 +418,44 @@ EXEC sys.sp_addextendedproperty @name = N'MS_Description',
     @level1type = N'PROCEDURE',  @level1name = N'EVALUATE_MODEL_PERFORMANCE';
 GO
 
-PRINT 'Bảng MODEL_VALIDATION_RESULTS đã được tạo thành công với các ngưỡng đánh giá mới';
+-- Trigger để tự động cập nhật ngưỡng GINI dựa trên MODEL_SUBTYPE
+CREATE OR ALTER TRIGGER MODEL_REGISTRY.dbo.TRG_SET_GINI_THRESHOLDS
+ON MODEL_REGISTRY.dbo.MODEL_VALIDATION_RESULTS
+AFTER INSERT, UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    -- Cập nhật ngưỡng GINI dựa trên MODEL_SUBTYPE
+    UPDATE mvr
+    SET 
+        GINI_THRESHOLD_RED = 
+            CASE 
+                WHEN mvr.MODEL_SUBTYPE = 'Retail AScore (without Bureau)' THEN 0.20
+                WHEN mvr.MODEL_SUBTYPE = 'Retail AScore (with Bureau)' THEN 0.25
+                WHEN mvr.MODEL_SUBTYPE = 'Retail BScore' THEN 0.35
+                WHEN mvr.MODEL_SUBTYPE = 'Wholesale Scorecard' THEN 0.40
+                ELSE 0.25 -- Default
+            END,
+        GINI_THRESHOLD_AMBER = 
+            CASE 
+                WHEN mvr.MODEL_SUBTYPE = 'Retail AScore (without Bureau)' THEN 0.25
+                WHEN mvr.MODEL_SUBTYPE = 'Retail AScore (with Bureau)' THEN 0.45
+                WHEN mvr.MODEL_SUBTYPE = 'Retail BScore' THEN 0.45
+                WHEN mvr.MODEL_SUBTYPE = 'Wholesale Scorecard' THEN 0.50
+                ELSE 0.35 -- Default
+            END
+    FROM MODEL_REGISTRY.dbo.MODEL_VALIDATION_RESULTS mvr
+    INNER JOIN inserted i ON mvr.VALIDATION_ID = i.VALIDATION_ID
+    WHERE mvr.MODEL_SUBTYPE IS NOT NULL;
+END;
+GO
+
+EXEC sys.sp_addextendedproperty @name = N'MS_Description', 
+    @value = N'Trigger để tự động cập nhật ngưỡng GINI dựa trên MODEL_SUBTYPE', 
+    @level0type = N'SCHEMA', @level0name = N'dbo', 
+    @level1type = N'TRIGGER',  @level1name = N'TRG_SET_GINI_THRESHOLDS';
+GO
+
+PRINT 'Bảng MODEL_VALIDATION_RESULTS đã được tạo thành công với cập nhật loại bỏ AUC_ROC, sử dụng chỉ KAPPA và ngưỡng GINI theo phân loại mô hình';
 GO
