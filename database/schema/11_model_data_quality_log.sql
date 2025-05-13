@@ -3,8 +3,15 @@ Tên file: 11_model_data_quality_log.sql
 Mô tả: Tạo bảng MODEL_DATA_QUALITY_LOG để ghi nhật ký các vấn đề chất lượng dữ liệu
 Tác giả: Nguyễn Ngọc Bình
 Ngày tạo: 2025-05-10
-Phiên bản: 1.0
+Phiên bản: 1.1 - Sửa lỗi extended properties
 */
+
+-- Xác nhận database đã được chọn
+IF DB_NAME() != 'MODEL_REGISTRY'
+BEGIN
+    RAISERROR('Vui lòng đảm bảo đang sử dụng database MODEL_REGISTRY', 16, 1)
+    RETURN
+END
 
 -- Kiểm tra nếu bảng đã tồn tại thì xóa
 IF OBJECT_ID('MODEL_REGISTRY.dbo.MODEL_DATA_QUALITY_LOG', 'U') IS NOT NULL
@@ -138,5 +145,5 @@ EXEC sys.sp_addextendedproperty @name = N'MS_Description',
     @level2type = N'COLUMN', @level2name = N'RESOLVED_DATE';
 GO
 
-PRINT 'Bảng MODEL_DATA_QUALITY_LOG đã được tạo thành công';
+PRINT N'Bảng MODEL_DATA_QUALITY_LOG đã được tạo thành công';
 GO

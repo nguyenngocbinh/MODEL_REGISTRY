@@ -3,8 +3,15 @@ Tên file: 04_model_source_tables.sql
 Mô tả: Tạo bảng MODEL_SOURCE_TABLES để quản lý các bảng nguồn được sử dụng bởi các mô hình
 Tác giả: Nguyễn Ngọc Bình
 Ngày tạo: 2025-05-10
-Phiên bản: 1.0
+Phiên bản: 1.1 - Sửa lỗi extended properties
 */
+
+-- Xác nhận database đã được chọn
+IF DB_NAME() != 'MODEL_REGISTRY'
+BEGIN
+    RAISERROR('Vui lòng đảm bảo đang sử dụng database MODEL_REGISTRY', 16, 1)
+    RETURN
+END
 
 -- Kiểm tra nếu bảng đã tồn tại thì xóa
 IF OBJECT_ID('MODEL_REGISTRY.dbo.MODEL_SOURCE_TABLES', 'U') IS NOT NULL
@@ -29,7 +36,7 @@ CREATE TABLE MODEL_REGISTRY.dbo.MODEL_SOURCE_TABLES (
     UPDATED_BY NVARCHAR(50) NULL,
     UPDATED_DATE DATETIME NULL,
     IS_ACTIVE BIT DEFAULT 1,
-    CONSTRAINTS UC_SOURCE_TABLE UNIQUE (SOURCE_DATABASE, SOURCE_SCHEMA, SOURCE_TABLE_NAME)
+    CONSTRAINT UC_SOURCE_TABLE UNIQUE (SOURCE_DATABASE, SOURCE_SCHEMA, SOURCE_TABLE_NAME)
 );
 GO
 
@@ -95,5 +102,5 @@ EXEC sys.sp_addextendedproperty @name = N'MS_Description',
     @level2type = N'COLUMN', @level2name = N'DATA_QUALITY_SCORE';
 GO
 
-PRINT 'Bảng MODEL_SOURCE_TABLES đã được tạo thành công';
+PRINT N'Bảng MODEL_SOURCE_TABLES đã được tạo thành công';
 GO

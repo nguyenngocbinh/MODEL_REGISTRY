@@ -3,8 +3,15 @@ Tên file: 05_model_column_details.sql
 Mô tả: Tạo bảng MODEL_COLUMN_DETAILS để lưu trữ thông tin chi tiết về các cột dữ liệu trong bảng nguồn
 Tác giả: Nguyễn Ngọc Bình
 Ngày tạo: 2025-05-10
-Phiên bản: 1.0
+Phiên bản: 1.1 - Sửa lỗi extended properties
 */
+
+-- Xác nhận database đã được chọn
+IF DB_NAME() != 'MODEL_REGISTRY'
+BEGIN
+    RAISERROR('Vui lòng đảm bảo đang sử dụng database MODEL_REGISTRY', 16, 1)
+    RETURN
+END
 
 -- Kiểm tra nếu bảng đã tồn tại thì xóa
 IF OBJECT_ID('MODEL_REGISTRY.dbo.MODEL_COLUMN_DETAILS', 'U') IS NOT NULL
@@ -30,7 +37,7 @@ CREATE TABLE MODEL_REGISTRY.dbo.MODEL_COLUMN_DETAILS (
     UPDATED_BY NVARCHAR(50) NULL,
     UPDATED_DATE DATETIME NULL,
     FOREIGN KEY (SOURCE_TABLE_ID) REFERENCES MODEL_REGISTRY.dbo.MODEL_SOURCE_TABLES(SOURCE_TABLE_ID),
-    CONSTRAINTS UC_SOURCE_COLUMN UNIQUE (SOURCE_TABLE_ID, COLUMN_NAME)
+    CONSTRAINT UC_SOURCE_COLUMN UNIQUE (SOURCE_TABLE_ID, COLUMN_NAME)
 );
 GO
 
@@ -109,5 +116,5 @@ EXEC sys.sp_addextendedproperty @name = N'MS_Description',
     @level2type = N'COLUMN', @level2name = N'TRANSFORMATION_LOGIC';
 GO
 
-PRINT 'Bảng MODEL_COLUMN_DETAILS đã được tạo thành công';
+PRINT N'Bảng MODEL_COLUMN_DETAILS đã được tạo thành công';
 GO
