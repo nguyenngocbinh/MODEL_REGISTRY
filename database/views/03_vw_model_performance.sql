@@ -6,13 +6,16 @@ Ngày tạo: 2025-05-10
 Phiên bản: 1.1 - Cập nhật theo các ngưỡng đánh giá hiệu suất mới
 */
 
+USE MODEL_REGISTRY
+GO
+
 -- Kiểm tra nếu view đã tồn tại thì xóa
 IF EXISTS (SELECT * FROM sys.views WHERE name = 'VW_MODEL_PERFORMANCE' AND schema_id = SCHEMA_ID('dbo'))
-    DROP VIEW MODEL_REGISTRY.dbo.VW_MODEL_PERFORMANCE;
+    DROP VIEW dbo.VW_MODEL_PERFORMANCE;
 GO
 
 -- Tạo view VW_MODEL_PERFORMANCE
-CREATE VIEW MODEL_REGISTRY.dbo.VW_MODEL_PERFORMANCE AS
+CREATE VIEW dbo.VW_MODEL_PERFORMANCE AS
 SELECT 
     mvr.VALIDATION_ID,
     mr.MODEL_ID,
@@ -25,8 +28,7 @@ SELECT
     mvr.VALIDATION_TYPE,
     mvr.VALIDATION_PERIOD,
     mvr.DATA_SAMPLE_SIZE,
-    mvr.DATA_SAMPLE_DESCRIPTION,
-    mvr.AUC_ROC,
+    mvr.DATA_SAMPLE_DESCRIPTION,    
     mvr.KS_STATISTIC,
     mvr.GINI,
     mvr.PSI,
@@ -38,15 +40,6 @@ SELECT
     mvr.BRIER_SCORE,
     mvr.LOG_LOSS,
     mvr.CSI,
-    
-    -- Tính % thay đổi so với lần đánh giá trước đó của cùng mô hình
-    LAG(mvr.AUC_ROC) OVER (PARTITION BY mr.MODEL_ID ORDER BY mvr.VALIDATION_DATE) AS PREV_AUC_ROC,
-    CASE 
-        WHEN LAG(mvr.AUC_ROC) OVER (PARTITION BY mr.MODEL_ID ORDER BY mvr.VALIDATION_DATE) IS NOT NULL 
-        THEN (mvr.AUC_ROC - LAG(mvr.AUC_ROC) OVER (PARTITION BY mr.MODEL_ID ORDER BY mvr.VALIDATION_DATE)) 
-              / LAG(mvr.AUC_ROC) OVER (PARTITION BY mr.MODEL_ID ORDER BY mvr.VALIDATION_DATE) * 100
-        ELSE NULL
-    END AS AUC_CHANGE_PCT,
     
     LAG(mvr.KS_STATISTIC) OVER (PARTITION BY mr.MODEL_ID ORDER BY mvr.VALIDATION_DATE) AS PREV_KS,
     CASE 
@@ -64,15 +57,7 @@ SELECT
         ELSE NULL
     END AS PSI_CHANGE_PCT,
     
-    -- Đánh giá hiệu suất dựa trên các ngưỡng cập nhật
-    -- AUC-ROC Rating: <0.6 (Red), 0.6-0.7 (Amber), >0.7 (Green)
-    CASE 
-        WHEN mvr.AUC_ROC < 0.6 THEN 'RED'
-        WHEN mvr.AUC_ROC >= 0.6 AND mvr.AUC_ROC <= 0.7 THEN 'AMBER'
-        WHEN mvr.AUC_ROC > 0.7 THEN 'GREEN'
-        ELSE 'N/A'
-    END AS AUC_RATING,
-    
+    -- Đánh giá hiệu suất dựa trên các ngưỡng cập nhật    
     -- KS Rating: <0.2 (Red), 0.2-0.3 (Amber), >0.3 (Green)
     CASE 
         WHEN mvr.KS_STATISTIC < 0.2 THEN 'RED'
@@ -115,8 +100,7 @@ SELECT
     
     -- Đánh giá tổng thể - cập nhật theo quy tắc mới (có ít nhất 1 Red = Red, nhiều hơn 2 Amber = Red, 1-2 Amber = Amber, tất cả Green = Green)
     CASE 
-        WHEN 
-            mvr.AUC_ROC < 0.6 OR
+        WHEN
             mvr.KS_STATISTIC < 0.2 OR
             mvr.GINI < 0.2 OR
             mvr.PSI > 0.25 OR
@@ -124,15 +108,13 @@ SELECT
             mvr.F1_SCORE < 0.2  -- KAPPA
         THEN 'RED'
         WHEN (
-            (CASE WHEN mvr.AUC_ROC >= 0.6 AND mvr.AUC_ROC <= 0.7 THEN 1 ELSE 0 END) +
             (CASE WHEN mvr.KS_STATISTIC >= 0.2 AND mvr.KS_STATISTIC <= 0.3 THEN 1 ELSE 0 END) +
             (CASE WHEN mvr.GINI >= 0.2 AND mvr.GINI <= 0.4 THEN 1 ELSE 0 END) +
             (CASE WHEN mvr.PSI >= 0.1 AND mvr.PSI <= 0.25 THEN 1 ELSE 0 END) +
             (CASE WHEN mvr.IV >= 0.02 AND mvr.IV <= 0.1 THEN 1 ELSE 0 END) +
             (CASE WHEN mvr.F1_SCORE >= 0.2 AND mvr.F1_SCORE < 0.6 THEN 1 ELSE 0 END)  -- KAPPA
         ) > 2 THEN 'RED'
-        WHEN (
-            (CASE WHEN mvr.AUC_ROC >= 0.6 AND mvr.AUC_ROC <= 0.7 THEN 1 ELSE 0 END) +
+        WHEN (            
             (CASE WHEN mvr.KS_STATISTIC >= 0.2 AND mvr.KS_STATISTIC <= 0.3 THEN 1 ELSE 0 END) +
             (CASE WHEN mvr.GINI >= 0.2 AND mvr.GINI <= 0.4 THEN 1 ELSE 0 END) +
             (CASE WHEN mvr.PSI >= 0.1 AND mvr.PSI <= 0.25 THEN 1 ELSE 0 END) +
@@ -175,5 +157,5 @@ EXEC sys.sp_addextendedproperty @name = N'MS_Description',
     @level1type = N'VIEW',  @level1name = N'VW_MODEL_PERFORMANCE';
 GO
 
-PRINT 'View VW_MODEL_PERFORMANCE đã được cập nhật thành công với các ngưỡng đánh giá mới';
+PRINT N'View VW_MODEL_PERFORMANCE đã được cập nhật thành công với các ngưỡng đánh giá mới';
 GO
