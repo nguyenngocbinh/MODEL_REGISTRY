@@ -4,7 +4,15 @@ Mô tả: Tạo bảng MODEL_VALIDATION_RESULTS để lưu trữ các kết qu�
 Tác giả: Nguyễn Ngọc Bình
 Ngày tạo: 2025-05-10
 Phiên bản: 1.2 - Cập nhật thêm điều chỉnh loại bỏ AUC_ROC, cập nhật ngưỡng GINI và sử dụng chỉ KAPPA
+Phiên bản: 1.3 - Sửa lỗi extended properties
 */
+
+-- Xác nhận database đã được chọn
+IF DB_NAME() != 'MODEL_REGISTRY'
+BEGIN
+    RAISERROR('Vui lòng đảm bảo đang sử dụng database MODEL_REGISTRY', 16, 1)
+    RETURN
+END
 
 -- Kiểm tra nếu bảng đã tồn tại thì xóa
 IF OBJECT_ID('MODEL_REGISTRY.dbo.MODEL_VALIDATION_RESULTS', 'U') IS NOT NULL
@@ -187,7 +195,7 @@ EXEC sys.sp_addextendedproperty @name = N'MS_Description',
 GO
 
 -- Tạo stored procedure để áp dụng đánh giá hiệu suất dựa trên các ngưỡng
-CREATE OR ALTER PROCEDURE MODEL_REGISTRY.dbo.EVALUATE_MODEL_PERFORMANCE
+CREATE OR ALTER PROCEDURE dbo.EVALUATE_MODEL_PERFORMANCE
     @MODEL_ID INT,
     @VALIDATION_ID INT = NULL
 AS
@@ -412,50 +420,5 @@ BEGIN
 END;
 GO
 
-EXEC sys.sp_addextendedproperty @name = N'MS_Description', 
-    @value = N'Đánh giá hiệu suất mô hình dựa trên các ngưỡng đã được thiết lập', 
-    @level0type = N'SCHEMA', @level0name = N'dbo', 
-    @level1type = N'PROCEDURE',  @level1name = N'EVALUATE_MODEL_PERFORMANCE';
-GO
-
--- Trigger để tự động cập nhật ngưỡng GINI dựa trên MODEL_SUBTYPE
-CREATE OR ALTER TRIGGER MODEL_REGISTRY.dbo.TRG_SET_GINI_THRESHOLDS
-ON MODEL_REGISTRY.dbo.MODEL_VALIDATION_RESULTS
-AFTER INSERT, UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    
-    -- Cập nhật ngưỡng GINI dựa trên MODEL_SUBTYPE
-    UPDATE mvr
-    SET 
-        GINI_THRESHOLD_RED = 
-            CASE 
-                WHEN mvr.MODEL_SUBTYPE = 'Retail AScore (without Bureau)' THEN 0.20
-                WHEN mvr.MODEL_SUBTYPE = 'Retail AScore (with Bureau)' THEN 0.25
-                WHEN mvr.MODEL_SUBTYPE = 'Retail BScore' THEN 0.35
-                WHEN mvr.MODEL_SUBTYPE = 'Wholesale Scorecard' THEN 0.40
-                ELSE 0.25 -- Default
-            END,
-        GINI_THRESHOLD_AMBER = 
-            CASE 
-                WHEN mvr.MODEL_SUBTYPE = 'Retail AScore (without Bureau)' THEN 0.25
-                WHEN mvr.MODEL_SUBTYPE = 'Retail AScore (with Bureau)' THEN 0.45
-                WHEN mvr.MODEL_SUBTYPE = 'Retail BScore' THEN 0.45
-                WHEN mvr.MODEL_SUBTYPE = 'Wholesale Scorecard' THEN 0.50
-                ELSE 0.35 -- Default
-            END
-    FROM MODEL_REGISTRY.dbo.MODEL_VALIDATION_RESULTS mvr
-    INNER JOIN inserted i ON mvr.VALIDATION_ID = i.VALIDATION_ID
-    WHERE mvr.MODEL_SUBTYPE IS NOT NULL;
-END;
-GO
-
-EXEC sys.sp_addextendedproperty @name = N'MS_Description', 
-    @value = N'Trigger để tự động cập nhật ngưỡng GINI dựa trên MODEL_SUBTYPE', 
-    @level0type = N'SCHEMA', @level0name = N'dbo', 
-    @level1type = N'TRIGGER',  @level1name = N'TRG_SET_GINI_THRESHOLDS';
-GO
-
-PRINT 'Bảng MODEL_VALIDATION_RESULTS đã được tạo thành công với cập nhật loại bỏ AUC_ROC, sử dụng chỉ KAPPA và ngưỡng GINI theo phân loại mô hình';
+PRINT N'Bảng MODEL_VALIDATION_RESULTS đã được tạo thành công';
 GO

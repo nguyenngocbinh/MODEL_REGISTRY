@@ -5,14 +5,16 @@ Tác giả: Nguyễn Ngọc Bình
 Ngày tạo: 2025-05-10
 Phiên bản: 1.0
 */
+USE MODEL_REGISTRY
+GO
 
 -- Kiểm tra nếu view đã tồn tại thì xóa
 IF EXISTS (SELECT * FROM sys.views WHERE name = 'VW_MODEL_TABLE_RELATIONSHIPS' AND schema_id = SCHEMA_ID('dbo'))
-    DROP VIEW MODEL_REGISTRY.dbo.VW_MODEL_TABLE_RELATIONSHIPS;
+    DROP VIEW dbo.VW_MODEL_TABLE_RELATIONSHIPS;
 GO
 
 -- Tạo view VW_MODEL_TABLE_RELATIONSHIPS
-CREATE VIEW MODEL_REGISTRY.dbo.VW_MODEL_TABLE_RELATIONSHIPS AS
+CREATE VIEW dbo.VW_MODEL_TABLE_RELATIONSHIPS AS
 SELECT 
     mr.MODEL_ID,
     mr.MODEL_NAME,
@@ -80,5 +82,5 @@ EXEC sys.sp_addextendedproperty @name = N'MS_Description',
     @level1type = N'VIEW',  @level1name = N'VW_MODEL_TABLE_RELATIONSHIPS';
 GO
 
-PRINT 'View VW_MODEL_TABLE_RELATIONSHIPS đã được tạo thành công';
+PRINT N'View VW_MODEL_TABLE_RELATIONSHIPS đã được tạo thành công';
 GO

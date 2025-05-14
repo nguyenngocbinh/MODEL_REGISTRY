@@ -3,8 +3,15 @@ Tên file: 03_model_parameters.sql
 Mô tả: Tạo bảng MODEL_PARAMETERS để lưu trữ tham số và hệ số của các mô hình
 Tác giả: Nguyễn Ngọc Bình
 Ngày tạo: 2025-05-10
-Phiên bản: 1.0
+Phiên bản: 1.1 - Sửa lỗi extended properties
 */
+
+-- Xác nhận database đã được chọn
+IF DB_NAME() != 'MODEL_REGISTRY'
+BEGIN
+    RAISERROR('Vui lòng đảm bảo đang sử dụng database MODEL_REGISTRY', 16, 1)
+    RETURN
+END
 
 -- Kiểm tra nếu bảng đã tồn tại thì xóa
 IF OBJECT_ID('MODEL_REGISTRY.dbo.MODEL_PARAMETERS', 'U') IS NOT NULL
@@ -128,5 +135,5 @@ EXEC sys.sp_addextendedproperty @name = N'MS_Description',
     @level2type = N'COLUMN', @level2name = N'CHANGE_REASON';
 GO
 
-PRINT 'Bảng MODEL_PARAMETERS đã được tạo thành công';
+PRINT N'Bảng MODEL_PARAMETERS đã được tạo thành công';
 GO
