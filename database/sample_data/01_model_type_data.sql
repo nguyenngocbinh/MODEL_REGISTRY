@@ -26,9 +26,9 @@ VALUES
 
 ('A-SCORE', 'Application Scorecard', N'Thẻ điểm đánh giá khách hàng tại thời điểm đăng ký. Được sử dụng trong quy trình phê duyệt khoản vay mới dựa trên thông tin đăng ký và thông tin bên ngoài.'),
 
-('SEGMENT', 'Segmentation Model', N'Mô hình phân khúc khách hàng thành các nhóm đồng nhất. Giúp phân loại khách hàng theo tính chất rủi ro hoặc hành vi tương đồng.'),
-
 ('C-SCORE', 'Collection Scorecard', N'Thẻ điểm đánh giá khả năng thu hồi nợ. Dùng để phân loại khách hàng quá hạn và xác định chiến lược thu hồi nợ phù hợp.'),
+
+('SEGMENT', 'Segmentation Model', N'Mô hình phân khúc khách hàng thành các nhóm đồng nhất. Giúp phân loại khách hàng theo tính chất rủi ro hoặc hành vi tương đồng.'),
 
 ('EARLY_WARN', 'Early Warning Signal', N'Mô hình cảnh báo sớm về khả năng vỡ nợ. Phát hiện các dấu hiệu suy giảm chất lượng tín dụng trước khi khách hàng thực sự vỡ nợ.'),
 
@@ -41,5 +41,5 @@ VALUES
 ('FRAUD', 'Fraud Detection', N'Mô hình phát hiện gian lận. Xác định các giao dịch hoặc đơn đăng ký có khả năng gian lận cao.');
 GO
 
-PRINT 'Đã nhập dữ liệu mẫu cho bảng MODEL_TYPE thành công.';
+PRINT N'Đã nhập dữ liệu mẫu cho bảng MODEL_TYPE thành công.';
 GO 

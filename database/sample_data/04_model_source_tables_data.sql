@@ -202,5 +202,5 @@ VALUES
  '["PARAMETER_ID"]', 1);
 GO
 
-PRINT 'Đã nhập dữ liệu mẫu cho bảng MODEL_SOURCE_TABLES thành công.';
+PRINT N'Đã nhập dữ liệu mẫu cho bảng MODEL_SOURCE_TABLES thành công.';
 GO
