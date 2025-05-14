@@ -6,13 +6,16 @@ Ngày tạo: 2025-05-10
 Phiên bản: 1.0
 */
 
+USE MODEL_REGISTRY
+GO
+
 -- Kiểm tra nếu proc đã tồn tại thì xóa
 IF OBJECT_ID('MODEL_REGISTRY.dbo.VALIDATE_MODEL_SOURCES', 'P') IS NOT NULL
-    DROP PROCEDURE MODEL_REGISTRY.dbo.VALIDATE_MODEL_SOURCES;
+    DROP PROCEDURE dbo.VALIDATE_MODEL_SOURCES;
 GO
 
 -- Tạo stored procedure VALIDATE_MODEL_SOURCES
-CREATE PROCEDURE MODEL_REGISTRY.dbo.VALIDATE_MODEL_SOURCES
+CREATE PROCEDURE dbo.VALIDATE_MODEL_SOURCES
     @MODEL_ID INT = NULL,
     @MODEL_NAME NVARCHAR(100) = NULL,
     @MODEL_VERSION NVARCHAR(20) = NULL,
@@ -30,7 +33,7 @@ BEGIN
     -- Xử lý lỗi nếu không có MODEL_ID hoặc MODEL_NAME
     IF @MODEL_ID IS NULL AND @MODEL_NAME IS NULL
     BEGIN
-        RAISERROR('Phải cung cấp MODEL_ID hoặc MODEL_NAME', 16, 1);
+        RAISERROR(N'Phải cung cấp MODEL_ID hoặc MODEL_NAME', 16, 1);
         RETURN;
     END
     
@@ -45,8 +48,11 @@ BEGIN
         
         IF @MODEL_ID IS NULL
         BEGIN
-            RAISERROR('Không tìm thấy mô hình phù hợp với tên "%s" và phiên bản "%s"', 16, 1, @MODEL_NAME, ISNULL(@MODEL_VERSION, 'bất kỳ'));
-            RETURN;
+            DECLARE @DISPLAY_VERSION NVARCHAR(20);
+			SET @DISPLAY_VERSION = ISNULL(@MODEL_VERSION, 'bất kỳ');
+
+			RAISERROR(N'Không tìm thấy mô hình phù hợp với tên "%s" và phiên bản "%s"', 16, 1, @MODEL_NAME, @DISPLAY_VERSION);
+			RETURN;
         END
     END
     
@@ -128,7 +134,7 @@ BEGIN
                 WHERE TABLE_CATALOG = st.SOURCE_DATABASE 
                   AND TABLE_SCHEMA = st.SOURCE_SCHEMA 
                   AND TABLE_NAME = st.SOURCE_TABLE_NAME
-            ) THEN 'Bảng không tồn tại'
+            ) THEN N'Bảng không tồn tại'
             ELSE NULL
         END AS ERROR_MESSAGE
     FROM MODEL_REGISTRY.dbo.MODEL_SOURCE_TABLES st
@@ -186,7 +192,7 @@ BEGIN
         UPDATE #TableValidationResults
         SET HAS_DATA_FOR_DATE = ISNULL(@HasDataParam, 0),
             ERROR_MESSAGE = CASE 
-                WHEN ISNULL(@HasDataParam, 0) = 0 THEN 'Không tìm thấy dữ liệu cho ngày ' + CONVERT(VARCHAR, @PROCESS_DATE, 103)
+                WHEN ISNULL(@HasDataParam, 0) = 0 THEN N'Không tìm thấy dữ liệu cho ngày ' + CONVERT(VARCHAR, @PROCESS_DATE, 103)
                 ELSE ERROR_MESSAGE
             END
         WHERE SOURCE_TABLE_ID = @TableId;
@@ -231,13 +237,13 @@ BEGIN
         @CriticalIssues AS CRITICAL_ISSUES,
         @QualityIssues AS QUALITY_ISSUES,
         CASE 
-            WHEN mr.IS_ACTIVE = 0 THEN 'Mô hình không hoạt động'
-            WHEN @PROCESS_DATE < mr.EFF_DATE THEN 'Mô hình chưa có hiệu lực đến ' + CONVERT(VARCHAR, mr.EFF_DATE, 103)
-            WHEN @PROCESS_DATE > mr.EXP_DATE THEN 'Mô hình đã hết hiệu lực từ ' + CONVERT(VARCHAR, mr.EXP_DATE, 103)
-            WHEN @CriticalIssues > 0 THEN 'Có vấn đề nghiêm trọng với ' + CAST(@CriticalIssues AS VARCHAR) + ' bảng quan trọng'
-            WHEN @QualityIssues > 0 AND @CHECK_DATA_QUALITY = 1 THEN 'Sẵn sàng nhưng có ' + CAST(@QualityIssues AS VARCHAR) + ' vấn đề chất lượng dữ liệu cần xử lý'
-            WHEN @ReadyTables < @TotalTables THEN 'Sẵn sàng nhưng có ' + CAST(@TotalTables - @ReadyTables AS VARCHAR) + ' bảng không sẵn sàng (không quan trọng)'
-            ELSE 'Mô hình có thể thực thi với dữ liệu từ ' + CONVERT(VARCHAR, @PROCESS_DATE, 103)
+            WHEN mr.IS_ACTIVE = 0 THEN N'Mô hình không hoạt động'
+            WHEN @PROCESS_DATE < mr.EFF_DATE THEN N'Mô hình chưa có hiệu lực đến ' + CONVERT(VARCHAR, mr.EFF_DATE, 103)
+            WHEN @PROCESS_DATE > mr.EXP_DATE THEN N'Mô hình đã hết hiệu lực từ ' + CONVERT(VARCHAR, mr.EXP_DATE, 103)
+            WHEN @CriticalIssues > 0 THEN N'Có vấn đề nghiêm trọng với ' + CAST(@CriticalIssues AS VARCHAR) + ' bảng quan trọng'
+            WHEN @QualityIssues > 0 AND @CHECK_DATA_QUALITY = 1 THEN N'Sẵn sàng nhưng có ' + CAST(@QualityIssues AS VARCHAR) + ' vấn đề chất lượng dữ liệu cần xử lý'
+            WHEN @ReadyTables < @TotalTables THEN N'Sẵn sàng nhưng có ' + CAST(@TotalTables - @ReadyTables AS VARCHAR) + ' bảng không sẵn sàng (không quan trọng)'
+            ELSE N'Mô hình có thể thực thi với dữ liệu từ ' + CONVERT(VARCHAR, @PROCESS_DATE, 103)
         END AS STATUS_DESCRIPTION
     FROM MODEL_REGISTRY.dbo.MODEL_REGISTRY mr
     JOIN MODEL_REGISTRY.dbo.MODEL_TYPE mt ON mr.TYPE_ID = mt.TYPE_ID
@@ -308,5 +314,5 @@ EXEC sys.sp_addextendedproperty @name = N'MS_Description',
     @level1type = N'PROCEDURE',  @level1name = N'VALIDATE_MODEL_SOURCES';
 GO
 
-PRINT 'Stored procedure VALIDATE_MODEL_SOURCES đã được tạo thành công';
+PRINT N'Stored procedure VALIDATE_MODEL_SOURCES đã được tạo thành công';
 GO

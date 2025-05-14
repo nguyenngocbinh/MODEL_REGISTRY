@@ -6,13 +6,16 @@ Ngày tạo: 2025-05-10
 Phiên bản: 1.0
 */
 
+USE MODEL_REGISTRY
+GO
+
 -- Kiểm tra nếu proc đã tồn tại thì xóa
 IF OBJECT_ID('MODEL_REGISTRY.dbo.GET_TABLE_MODELS', 'P') IS NOT NULL
-    DROP PROCEDURE MODEL_REGISTRY.dbo.GET_TABLE_MODELS;
+    DROP PROCEDURE dbo.GET_TABLE_MODELS;
 GO
 
 -- Tạo stored procedure GET_TABLE_MODELS
-CREATE PROCEDURE MODEL_REGISTRY.dbo.GET_TABLE_MODELS
+CREATE PROCEDURE dbo.GET_TABLE_MODELS
     @DATABASE_NAME NVARCHAR(128),
     @SCHEMA_NAME NVARCHAR(128),
     @TABLE_NAME NVARCHAR(128),
@@ -29,7 +32,7 @@ BEGIN
     -- Kiểm tra tham số đầu vào
     IF @DATABASE_NAME IS NULL OR @SCHEMA_NAME IS NULL OR @TABLE_NAME IS NULL
     BEGIN
-        RAISERROR('Phải cung cấp đầy đủ thông tin bảng: DATABASE_NAME, SCHEMA_NAME, và TABLE_NAME', 16, 1);
+        RAISERROR(N'Phải cung cấp đầy đủ thông tin bảng: DATABASE_NAME, SCHEMA_NAME, và TABLE_NAME', 16, 1);
         RETURN;
     END
     
@@ -44,7 +47,7 @@ BEGIN
       
     IF @SOURCE_TABLE_ID IS NULL
     BEGIN
-        RAISERROR('Bảng %s.%s.%s không tồn tại trong registry', 16, 1, @DATABASE_NAME, @SCHEMA_NAME, @TABLE_NAME);
+        RAISERROR(N'Bảng %s.%s.%s không tồn tại trong registry', 16, 1, @DATABASE_NAME, @SCHEMA_NAME, @TABLE_NAME);
         RETURN;
     END
     
@@ -106,7 +109,11 @@ BEGIN
         ) AS OPEN_ISSUES_COUNT
     FROM MODEL_REGISTRY.dbo.MODEL_COLUMN_DETAILS cd
     WHERE cd.SOURCE_TABLE_ID = @SOURCE_TABLE_ID
-    ORDER BY cd.IS_FEATURE DESC, cd.FEATURE_IMPORTANCE DESC NULLS LAST, cd.COLUMN_NAME;
+    -- FIX: Removed "NULLS LAST" which is not supported in SQL Server and replaced with a CASE expression
+    ORDER BY cd.IS_FEATURE DESC, 
+             CASE WHEN cd.FEATURE_IMPORTANCE IS NULL THEN 0 ELSE 1 END DESC, 
+             CASE WHEN cd.FEATURE_IMPORTANCE IS NULL THEN 0 ELSE cd.FEATURE_IMPORTANCE END DESC, 
+             cd.COLUMN_NAME;
     
     -- Lấy danh sách tất cả các mô hình sử dụng bảng này
     SELECT 
@@ -180,5 +187,5 @@ EXEC sys.sp_addextendedproperty @name = N'MS_Description',
     @level1type = N'PROCEDURE',  @level1name = N'GET_TABLE_MODELS';
 GO
 
-PRINT 'Stored procedure GET_TABLE_MODELS đã được tạo thành công';
+PRINT N'Stored procedure GET_TABLE_MODELS đã được tạo thành công';
 GO
