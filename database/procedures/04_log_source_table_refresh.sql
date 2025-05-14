@@ -6,13 +6,16 @@ Ngày tạo: 2025-05-10
 Phiên bản: 1.0
 */
 
+USE MODEL_REGISTRY
+GO
+
 -- Kiểm tra nếu proc đã tồn tại thì xóa
 IF OBJECT_ID('MODEL_REGISTRY.dbo.LOG_SOURCE_TABLE_REFRESH', 'P') IS NOT NULL
-    DROP PROCEDURE MODEL_REGISTRY.dbo.LOG_SOURCE_TABLE_REFRESH;
+    DROP PROCEDURE dbo.LOG_SOURCE_TABLE_REFRESH;
 GO
 
 -- Tạo stored procedure LOG_SOURCE_TABLE_REFRESH
-CREATE PROCEDURE MODEL_REGISTRY.dbo.LOG_SOURCE_TABLE_REFRESH
+CREATE PROCEDURE dbo.LOG_SOURCE_TABLE_REFRESH
     @SOURCE_DATABASE NVARCHAR(128),
     @SOURCE_SCHEMA NVARCHAR(128),
     @SOURCE_TABLE_NAME NVARCHAR(128),
@@ -36,14 +39,14 @@ BEGIN
     -- Xác thực đầu vào
     IF @SOURCE_DATABASE IS NULL OR @SOURCE_SCHEMA IS NULL OR @SOURCE_TABLE_NAME IS NULL OR @PROCESS_DATE IS NULL OR @REFRESH_STATUS IS NULL
     BEGIN
-        RAISERROR('Phải cung cấp đầy đủ thông tin: SOURCE_DATABASE, SOURCE_SCHEMA, SOURCE_TABLE_NAME, PROCESS_DATE, REFRESH_STATUS', 16, 1);
+        RAISERROR(N'Phải cung cấp đầy đủ thông tin: SOURCE_DATABASE, SOURCE_SCHEMA, SOURCE_TABLE_NAME, PROCESS_DATE, REFRESH_STATUS', 16, 1);
         RETURN;
     END
     
     -- Xác thực trạng thái
     IF @REFRESH_STATUS NOT IN ('STARTED', 'COMPLETED', 'FAILED', 'PARTIAL')
     BEGIN
-        RAISERROR('REFRESH_STATUS không hợp lệ. Giá trị hợp lệ là: STARTED, COMPLETED, FAILED, PARTIAL', 16, 1);
+        RAISERROR(N'REFRESH_STATUS không hợp lệ. Giá trị hợp lệ là: STARTED, COMPLETED, FAILED, PARTIAL', 16, 1);
         RETURN;
     END
     
@@ -76,7 +79,7 @@ BEGIN
             @SOURCE_SCHEMA,
             @SOURCE_TABLE_NAME,
             'INPUT', -- Giả định mặc định là bảng đầu vào
-            'Tự động thêm bởi LOG_SOURCE_TABLE_REFRESH',
+            N'Tự động thêm bởi LOG_SOURCE_TABLE_REFRESH',
             'Unknown',
             CASE 
                 WHEN @REFRESH_METHOD = 'SCHEDULED' THEN 'DAILY'
@@ -89,7 +92,7 @@ BEGIN
         
         SET @SOURCE_TABLE_ID = SCOPE_IDENTITY();
         
-        PRINT 'Đã thêm mới bảng ' + @SOURCE_DATABASE + '.' + @SOURCE_SCHEMA + '.' + @SOURCE_TABLE_NAME + ' vào danh mục với ID ' + CAST(@SOURCE_TABLE_ID AS VARCHAR);
+        PRINT N'Đã thêm mới bảng ' + @SOURCE_DATABASE + '.' + @SOURCE_SCHEMA + '.' + @SOURCE_TABLE_NAME + ' vào danh mục với ID ' + CAST(@SOURCE_TABLE_ID AS VARCHAR);
     END
     
     -- Tính thời gian thực thi
@@ -144,7 +147,7 @@ BEGIN
             WHERE SOURCE_TABLE_ID = @SOURCE_TABLE_ID;
         END
         
-        PRINT 'Cập nhật bản ghi refresh với ID ' + CAST(@EXISTING_REFRESH_ID AS VARCHAR) + ' thành ' + @REFRESH_STATUS;
+        PRINT N'Cập nhật bản ghi refresh với ID ' + CAST(@EXISTING_REFRESH_ID AS VARCHAR) + ' thành ' + @REFRESH_STATUS;
     END
     -- Nếu không tìm thấy bản ghi STARTED hoặc đang tạo bản ghi STARTED mới
     ELSE
@@ -198,7 +201,7 @@ BEGIN
         
         DECLARE @NEW_REFRESH_ID INT = SCOPE_IDENTITY();
         
-        PRINT 'Tạo mới bản ghi refresh với ID ' + CAST(@NEW_REFRESH_ID AS VARCHAR) + ' với trạng thái ' + @REFRESH_STATUS;
+        PRINT N'Tạo mới bản ghi refresh với ID ' + CAST(@NEW_REFRESH_ID AS VARCHAR) + ' với trạng thái ' + @REFRESH_STATUS;
         
         -- Nếu AUTO_COMPLETE = 1 và trạng thái hiện tại là STARTED, tự động tạo bản ghi COMPLETED mới
         IF @AUTO_COMPLETE = 1 AND @REFRESH_STATUS = 'STARTED'
@@ -245,10 +248,10 @@ BEGIN
         r.CREATED_BY,
         r.CREATED_DATE,
         CASE 
-            WHEN r.REFRESH_STATUS = 'COMPLETED' THEN 'Dữ liệu đã sẵn sàng cho xử lý mô hình'
-            WHEN r.REFRESH_STATUS = 'FAILED' THEN 'Cập nhật dữ liệu thất bại, xem thông báo lỗi'
-            WHEN r.REFRESH_STATUS = 'PARTIAL' THEN 'Dữ liệu được cập nhật một phần, có thể có vấn đề'
-            ELSE 'Cập nhật dữ liệu đang tiến hành'
+            WHEN r.REFRESH_STATUS = 'COMPLETED' THEN N'Dữ liệu đã sẵn sàng cho xử lý mô hình'
+            WHEN r.REFRESH_STATUS = 'FAILED' THEN N'Cập nhật dữ liệu thất bại, xem thông báo lỗi'
+            WHEN r.REFRESH_STATUS = 'PARTIAL' THEN N'Dữ liệu được cập nhật một phần, có thể có vấn đề'
+            ELSE N'Cập nhật dữ liệu đang tiến hành'
         END AS DESCRIPTION
     FROM MODEL_REGISTRY.dbo.MODEL_SOURCE_REFRESH_LOG r
     JOIN MODEL_REGISTRY.dbo.MODEL_SOURCE_TABLES st ON r.SOURCE_TABLE_ID = st.SOURCE_TABLE_ID
@@ -290,5 +293,5 @@ EXEC sys.sp_addextendedproperty @name = N'MS_Description',
     @level1type = N'PROCEDURE',  @level1name = N'LOG_SOURCE_TABLE_REFRESH';
 GO
 
-PRINT 'Stored procedure LOG_SOURCE_TABLE_REFRESH đã được tạo thành công';
+PRINT N'Stored procedure LOG_SOURCE_TABLE_REFRESH đã được tạo thành công';
 GO

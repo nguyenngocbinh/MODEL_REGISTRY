@@ -3,16 +3,19 @@ Tên file: 06_get_model_performance_history.sql
 Mô tả: Tạo stored procedure GET_MODEL_PERFORMANCE_HISTORY để lấy lịch sử hiệu suất của mô hình theo thời gian
 Tác giả: Nguyễn Ngọc Bình
 Ngày tạo: 2025-05-10
-Phiên bản: 1.0
+Phiên bản: 1.2 - Fix: Corrected to use GINI instead of AUC_ROC and added proper division by zero handling
 */
+
+USE MODEL_REGISTRY
+GO
 
 -- Kiểm tra nếu proc đã tồn tại thì xóa
 IF OBJECT_ID('MODEL_REGISTRY.dbo.GET_MODEL_PERFORMANCE_HISTORY', 'P') IS NOT NULL
-    DROP PROCEDURE MODEL_REGISTRY.dbo.GET_MODEL_PERFORMANCE_HISTORY;
+    DROP PROCEDURE dbo.GET_MODEL_PERFORMANCE_HISTORY;
 GO
 
 -- Tạo stored procedure GET_MODEL_PERFORMANCE_HISTORY
-CREATE PROCEDURE MODEL_REGISTRY.dbo.GET_MODEL_PERFORMANCE_HISTORY
+CREATE PROCEDURE dbo.GET_MODEL_PERFORMANCE_HISTORY
     @MODEL_ID INT = NULL,
     @MODEL_NAME NVARCHAR(100) = NULL,
     @START_DATE DATE = NULL,
@@ -26,7 +29,7 @@ BEGIN
     -- Xử lý lỗi nếu không có MODEL_ID hoặc MODEL_NAME
     IF @MODEL_ID IS NULL AND @MODEL_NAME IS NULL
     BEGIN
-        RAISERROR('Phải cung cấp MODEL_ID hoặc MODEL_NAME', 16, 1);
+        RAISERROR(N'Phải cung cấp MODEL_ID hoặc MODEL_NAME', 16, 1);
         RETURN;
     END
     
@@ -39,7 +42,7 @@ BEGIN
         
         IF @MODEL_ID IS NULL
         BEGIN
-            RAISERROR('Không tìm thấy mô hình có tên "%s"', 16, 1, @MODEL_NAME);
+            RAISERROR(N'Không tìm thấy mô hình có tên "%s"', 16, 1, @MODEL_NAME);
             RETURN;
         END
     END
@@ -82,9 +85,9 @@ BEGIN
         mvr.VALIDATION_STATUS,
         
         -- Các chỉ số hiệu suất chính
-        mvr.AUC_ROC,
-        mvr.KS_STATISTIC,
+        -- FIX: Removed AUC_ROC references and use GINI as the primary metric
         mvr.GINI,
+        mvr.KS_STATISTIC,
         mvr.PSI,
         
         -- Các chỉ số phân loại
@@ -106,26 +109,29 @@ BEGIN
         CASE WHEN @INCLUDE_DETAILS = 1 THEN mvr.VALIDATION_COMMENTS ELSE NULL END AS VALIDATION_COMMENTS,
         
         -- Tính toán % thay đổi so với lần đánh giá trước đó
-        LAG(mvr.AUC_ROC) OVER (ORDER BY mvr.VALIDATION_DATE) AS PREV_AUC_ROC,
+        -- FIX: Now using GINI as the primary metric instead of AUC_ROC
+        LAG(mvr.GINI) OVER (ORDER BY mvr.VALIDATION_DATE) AS PREV_GINI,
+
+        -- FIX: Added proper handling for division by zero scenarios
         CASE 
-            WHEN LAG(mvr.AUC_ROC) OVER (ORDER BY mvr.VALIDATION_DATE) IS NOT NULL 
-            THEN (mvr.AUC_ROC - LAG(mvr.AUC_ROC) OVER (ORDER BY mvr.VALIDATION_DATE)) 
-                  / LAG(mvr.AUC_ROC) OVER (ORDER BY mvr.VALIDATION_DATE) * 100
-            ELSE NULL
-        END AS AUC_CHANGE_PCT,
+            WHEN LAG(mvr.GINI) OVER (ORDER BY mvr.VALIDATION_DATE) IS NULL OR
+                 LAG(mvr.GINI) OVER (ORDER BY mvr.VALIDATION_DATE) = 0 THEN NULL 
+            ELSE (mvr.GINI - LAG(mvr.GINI) OVER (ORDER BY mvr.VALIDATION_DATE)) 
+                  / NULLIF(LAG(mvr.GINI) OVER (ORDER BY mvr.VALIDATION_DATE), 0) * 100
+        END AS GINI_CHANGE_PCT,
         
         CASE 
-            WHEN LAG(mvr.KS_STATISTIC) OVER (ORDER BY mvr.VALIDATION_DATE) IS NOT NULL 
-            THEN (mvr.KS_STATISTIC - LAG(mvr.KS_STATISTIC) OVER (ORDER BY mvr.VALIDATION_DATE)) 
-                  / LAG(mvr.KS_STATISTIC) OVER (ORDER BY mvr.VALIDATION_DATE) * 100
-            ELSE NULL
+            WHEN LAG(mvr.KS_STATISTIC) OVER (ORDER BY mvr.VALIDATION_DATE) IS NULL OR
+                 LAG(mvr.KS_STATISTIC) OVER (ORDER BY mvr.VALIDATION_DATE) = 0 THEN NULL 
+            ELSE (mvr.KS_STATISTIC - LAG(mvr.KS_STATISTIC) OVER (ORDER BY mvr.VALIDATION_DATE)) 
+                  / NULLIF(LAG(mvr.KS_STATISTIC) OVER (ORDER BY mvr.VALIDATION_DATE), 0) * 100
         END AS KS_CHANGE_PCT,
         
         CASE 
-            WHEN LAG(mvr.PSI) OVER (ORDER BY mvr.VALIDATION_DATE) IS NOT NULL 
-            THEN (mvr.PSI - LAG(mvr.PSI) OVER (ORDER BY mvr.VALIDATION_DATE)) 
-                  / LAG(mvr.PSI) OVER (ORDER BY mvr.VALIDATION_DATE) * 100
-            ELSE NULL
+            WHEN LAG(mvr.PSI) OVER (ORDER BY mvr.VALIDATION_DATE) IS NULL OR
+                 LAG(mvr.PSI) OVER (ORDER BY mvr.VALIDATION_DATE) = 0 THEN NULL 
+            ELSE (mvr.PSI - LAG(mvr.PSI) OVER (ORDER BY mvr.VALIDATION_DATE)) 
+                  / NULLIF(LAG(mvr.PSI) OVER (ORDER BY mvr.VALIDATION_DATE), 0) * 100
         END AS PSI_CHANGE_PCT
     FROM MODEL_REGISTRY.dbo.MODEL_VALIDATION_RESULTS mvr
     WHERE mvr.MODEL_ID = @MODEL_ID
@@ -152,27 +158,57 @@ BEGIN
         ORDER BY mvr.VALIDATION_DATE DESC;
     END
     
+    -- FIX: Modified performance trend calculation to use GINI instead of AUC_ROC
     -- Hiển thị tóm tắt xu hướng hiệu suất
     SELECT 
         MIN(mvr.VALIDATION_DATE) AS EARLIEST_VALIDATION,
         MAX(mvr.VALIDATION_DATE) AS LATEST_VALIDATION,
         COUNT(*) AS VALIDATION_COUNT,
-        AVG(mvr.AUC_ROC) AS AVG_AUC_ROC,
-        MIN(mvr.AUC_ROC) AS MIN_AUC_ROC,
-        MAX(mvr.AUC_ROC) AS MAX_AUC_ROC,
+        AVG(mvr.GINI) AS AVG_GINI,
+        MIN(mvr.GINI) AS MIN_GINI,
+        MAX(mvr.GINI) AS MAX_GINI,
         AVG(mvr.KS_STATISTIC) AS AVG_KS,
         AVG(mvr.PSI) AS AVG_PSI,
         CASE 
-            WHEN MIN(mvr.VALIDATION_DATE) = MAX(mvr.VALIDATION_DATE) THEN NULL
-            WHEN 
-                FIRST_VALUE(mvr.AUC_ROC) OVER (ORDER BY mvr.VALIDATION_DATE DESC) - 
-                FIRST_VALUE(mvr.AUC_ROC) OVER (ORDER BY mvr.VALIDATION_DATE ASC) > 0 
-            THEN 'IMPROVING'
-            WHEN 
-                FIRST_VALUE(mvr.AUC_ROC) OVER (ORDER BY mvr.VALIDATION_DATE DESC) - 
-                FIRST_VALUE(mvr.AUC_ROC) OVER (ORDER BY mvr.VALIDATION_DATE ASC) < 0 
-            THEN 'DEGRADING'
-            ELSE 'STABLE'
+            WHEN COUNT(*) <= 1 THEN 'NOT_ENOUGH_DATA'
+            WHEN MAX(mvr.VALIDATION_DATE) = MIN(mvr.VALIDATION_DATE) THEN 'NOT_ENOUGH_DATA'
+            ELSE
+                CASE
+                    -- Use proper window functions to get first and last values for GINI
+                    WHEN (
+                        SELECT TOP 1 mvr2.GINI
+                        FROM MODEL_REGISTRY.dbo.MODEL_VALIDATION_RESULTS mvr2
+                        WHERE mvr2.MODEL_ID = @MODEL_ID
+                        AND mvr2.VALIDATION_DATE BETWEEN @START_DATE AND @END_DATE
+                        AND (@VALIDATION_TYPE IS NULL OR mvr2.VALIDATION_TYPE = @VALIDATION_TYPE)
+                        ORDER BY mvr2.VALIDATION_DATE DESC
+                    ) - (
+                        SELECT TOP 1 mvr3.GINI
+                        FROM MODEL_REGISTRY.dbo.MODEL_VALIDATION_RESULTS mvr3
+                        WHERE mvr3.MODEL_ID = @MODEL_ID
+                        AND mvr3.VALIDATION_DATE BETWEEN @START_DATE AND @END_DATE
+                        AND (@VALIDATION_TYPE IS NULL OR mvr3.VALIDATION_TYPE = @VALIDATION_TYPE)
+                        ORDER BY mvr3.VALIDATION_DATE ASC
+                    ) > 0.01 
+                    THEN 'IMPROVING'
+                    WHEN (
+                        SELECT TOP 1 mvr2.GINI
+                        FROM MODEL_REGISTRY.dbo.MODEL_VALIDATION_RESULTS mvr2
+                        WHERE mvr2.MODEL_ID = @MODEL_ID
+                        AND mvr2.VALIDATION_DATE BETWEEN @START_DATE AND @END_DATE
+                        AND (@VALIDATION_TYPE IS NULL OR mvr2.VALIDATION_TYPE = @VALIDATION_TYPE)
+                        ORDER BY mvr2.VALIDATION_DATE DESC
+                    ) - (
+                        SELECT TOP 1 mvr3.GINI
+                        FROM MODEL_REGISTRY.dbo.MODEL_VALIDATION_RESULTS mvr3
+                        WHERE mvr3.MODEL_ID = @MODEL_ID
+                        AND mvr3.VALIDATION_DATE BETWEEN @START_DATE AND @END_DATE
+                        AND (@VALIDATION_TYPE IS NULL OR mvr3.VALIDATION_TYPE = @VALIDATION_TYPE)
+                        ORDER BY mvr3.VALIDATION_DATE ASC
+                    ) < -0.01 
+                    THEN 'DEGRADING'
+                    ELSE 'STABLE'
+                END
         END AS PERFORMANCE_TREND
     FROM MODEL_REGISTRY.dbo.MODEL_VALIDATION_RESULTS mvr
     WHERE mvr.MODEL_ID = @MODEL_ID
@@ -188,5 +224,5 @@ EXEC sys.sp_addextendedproperty @name = N'MS_Description',
     @level1type = N'PROCEDURE',  @level1name = N'GET_MODEL_PERFORMANCE_HISTORY';
 GO
 
-PRINT 'Stored procedure GET_MODEL_PERFORMANCE_HISTORY đã được tạo thành công';
+PRINT N'Stored procedure GET_MODEL_PERFORMANCE_HISTORY đã được tạo thành công';
 GO

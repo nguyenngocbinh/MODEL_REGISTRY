@@ -6,13 +6,16 @@ Ngày tạo: 2025-05-10
 Phiên bản: 1.0
 */
 
+USE MODEL_REGISTRY
+GO
+
 -- Kiểm tra nếu proc đã tồn tại thì xóa
 IF OBJECT_ID('MODEL_REGISTRY.dbo.GET_APPROPRIATE_MODEL', 'P') IS NOT NULL
-    DROP PROCEDURE MODEL_REGISTRY.dbo.GET_APPROPRIATE_MODEL;
+    DROP PROCEDURE dbo.GET_APPROPRIATE_MODEL;
 GO
 
 -- Tạo stored procedure GET_APPROPRIATE_MODEL
-CREATE PROCEDURE MODEL_REGISTRY.dbo.GET_APPROPRIATE_MODEL
+CREATE PROCEDURE dbo.GET_APPROPRIATE_MODEL
     @CUSTOMER_ID NVARCHAR(50),
     @PROCESS_DATE DATE = NULL,
     @MODEL_TYPE_CODE NVARCHAR(20) = NULL,
@@ -30,7 +33,7 @@ BEGIN
     -- Xác thực đầu vào
     IF @CUSTOMER_ID IS NULL
     BEGIN
-        RAISERROR('Phải cung cấp CUSTOMER_ID', 16, 1);
+        RAISERROR(N'Phải cung cấp CUSTOMER_ID', 16, 1);
         RETURN;
     END
     
@@ -99,7 +102,7 @@ BEGIN
         -- In thông báo
         SELECT 
             'NO_ELIGIBLE_MODELS' AS RESULT,
-            'Không tìm thấy mô hình nào phù hợp với các tiêu chí đã chọn' AS MESSAGE,
+            N'Không tìm thấy mô hình nào phù hợp với các tiêu chí đã chọn' AS MESSAGE,
             @CUSTOMER_ID AS CUSTOMER_ID,
             @PROCESS_DATE AS PROCESS_DATE,
             @MODEL_TYPE_CODE AS MODEL_TYPE_CODE,
@@ -226,7 +229,7 @@ BEGIN
         -- In thông báo
         SELECT 
             'NO_ACTIVE_MODELS' AS RESULT,
-            'Không tìm thấy mô hình đang hoạt động' AS MESSAGE,
+            N'Không tìm thấy mô hình đang hoạt động' AS MESSAGE,
             @CUSTOMER_ID AS CUSTOMER_ID,
             @PROCESS_DATE AS PROCESS_DATE,
             @MODEL_TYPE_CODE AS MODEL_TYPE_CODE,
@@ -295,9 +298,9 @@ BEGIN
         si.SOURCE_TABLE_NAME AS OUTPUT_TABLE,
         si.MODEL_READY_STATUS,
         CASE 
-            WHEN si.MODEL_READY_STATUS = 'READY' THEN 'Mô hình sẵn sàng để sử dụng'
-            WHEN si.MODEL_READY_STATUS = 'OUTPUT_TABLE_MISSING' THEN 'Bảng đầu ra không tồn tại'
-            ELSE 'Mô hình chưa sẵn sàng, cần kiểm tra dữ liệu'
+            WHEN si.MODEL_READY_STATUS = 'READY' THEN N'Mô hình sẵn sàng để sử dụng'
+            WHEN si.MODEL_READY_STATUS = 'OUTPUT_TABLE_MISSING' THEN N'Bảng đầu ra không tồn tại'
+            ELSE N'Mô hình chưa sẵn sàng, cần kiểm tra dữ liệu'
         END AS READY_STATUS_DESCRIPTION
     FROM @SelectedModelInfo si;
     
@@ -330,5 +333,5 @@ EXEC sys.sp_addextendedproperty @name = N'MS_Description',
     @level1type = N'PROCEDURE',  @level1name = N'GET_APPROPRIATE_MODEL';
 GO
 
-PRINT 'Stored procedure GET_APPROPRIATE_MODEL đã được tạo thành công';
+PRINT N'Stored procedure GET_APPROPRIATE_MODEL đã được tạo thành công';
 GO

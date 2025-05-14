@@ -6,13 +6,16 @@ Ngày tạo: 2025-05-10
 Phiên bản: 1.0
 */
 
+USE MODEL_REGISTRY
+GO
+
 -- Kiểm tra nếu proc đã tồn tại thì xóa
 IF OBJECT_ID('MODEL_REGISTRY.dbo.GET_MODEL_TABLES', 'P') IS NOT NULL
-    DROP PROCEDURE MODEL_REGISTRY.dbo.GET_MODEL_TABLES;
+    DROP PROCEDURE dbo.GET_MODEL_TABLES;
 GO
 
 -- Tạo stored procedure GET_MODEL_TABLES
-CREATE PROCEDURE MODEL_REGISTRY.dbo.GET_MODEL_TABLES
+CREATE PROCEDURE dbo.GET_MODEL_TABLES
     @MODEL_ID INT = NULL,
     @MODEL_NAME NVARCHAR(100) = NULL,
     @MODEL_VERSION NVARCHAR(20) = NULL,
@@ -29,7 +32,7 @@ BEGIN
     -- Xử lý lỗi nếu không có MODEL_ID hoặc MODEL_NAME
     IF @MODEL_ID IS NULL AND @MODEL_NAME IS NULL
     BEGIN
-        RAISERROR('Phải cung cấp MODEL_ID hoặc MODEL_NAME', 16, 1);
+        RAISERROR(N'Phải cung cấp MODEL_ID hoặc MODEL_NAME', 16, 1);
         RETURN;
     END
     
@@ -44,8 +47,11 @@ BEGIN
         
         IF @MODEL_ID IS NULL
         BEGIN
-            RAISERROR('Không tìm thấy mô hình phù hợp với tên "%s" và phiên bản "%s"', 16, 1, @MODEL_NAME, ISNULL(@MODEL_VERSION, 'bất kỳ'));
-            RETURN;
+            DECLARE @DISPLAY_VERSION NVARCHAR(20);
+			SET @DISPLAY_VERSION = ISNULL(@MODEL_VERSION, 'bất kỳ');
+
+			RAISERROR(N'Không tìm thấy mô hình phù hợp với tên "%s" và phiên bản "%s"', 16, 1, @MODEL_NAME, @DISPLAY_VERSION);
+			RETURN;
         END
     END
     
@@ -170,5 +176,5 @@ EXEC sys.sp_addextendedproperty @name = N'MS_Description',
     @level1type = N'PROCEDURE',  @level1name = N'GET_MODEL_TABLES';
 GO
 
-PRINT 'Stored procedure GET_MODEL_TABLES đã được tạo thành công';
+PRINT N'Stored procedure GET_MODEL_TABLES đã được tạo thành công';
 GO
