@@ -1,0 +1,385 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 1300" width="100%" height="100%">
+  <!-- Styles -->
+  <style>
+    .entity { fill: #e6f3ff; stroke: #3498db; stroke-width: 2; }
+    .entity-title { fill: #3498db; }
+    .feature-entity { fill: #e3f5ec; stroke: #20c997; stroke-width: 2; }
+    .feature-entity-title { fill: #20c997; }
+    .entity-text { font-family: Arial; font-size: 12px; }
+    .title-text { font-family: Arial; font-size: 14px; font-weight: bold; fill: white; }
+    .attribute { font-family: Arial; font-size: 12px; }
+    .pk { font-weight: bold; }
+    .fk { font-style: italic; fill: #555; }
+    .relationship { stroke: #555; stroke-width: 1.5; fill: none; }
+    .feature-relationship { stroke: #20c997; stroke-width: 1.5; fill: none; }
+    .mixed-relationship { stroke: #9c59b6; stroke-width: 1.5; fill: none; }
+    .cardinality { font-family: Arial; font-size: 12px; fill: #555; }
+    .diagram-title { font-family: Arial; font-size: 20px; font-weight: bold; fill: #333; }
+    .section-title { font-family: Arial; font-size: 18px; font-weight: bold; fill: #666; }
+  </style>
+
+  <!-- Title -->
+  <text x="700" y="30" text-anchor="middle" class="diagram-title">Enhanced Entity Relationship Diagram: Model Registry with Feature Store</text>
+
+  <!-- Section Titles -->
+  <text x="300" y="70" class="section-title">Model Registry Components</text>
+  <text x="1000" y="70" class="section-title">Feature Store Components</text>
+  
+  <!-- MODEL_TYPE Entity -->
+  <g transform="translate(50, 100)">
+    <rect width="200" height="30" class="entity-title" rx="5" ry="5" />
+    <text x="100" y="20" text-anchor="middle" class="title-text">MODEL_TYPE</text>
+    <rect width="200" height="140" y="30" class="entity" rx="0" ry="0" />
+    <text x="10" y="50" class="attribute pk">TYPE_ID (PK)</text>
+    <text x="10" y="70" class="attribute">TYPE_CODE</text>
+    <text x="10" y="90" class="attribute">TYPE_NAME</text>
+    <text x="10" y="110" class="attribute">TYPE_DESCRIPTION</text>
+    <text x="10" y="130" class="attribute">IS_ACTIVE</text>
+    <text x="10" y="150" class="attribute">CREATED_BY</text>
+    <text x="10" y="170" class="attribute">CREATED_DATE</text>
+  </g>
+
+  <!-- MODEL_REGISTRY Entity -->
+  <g transform="translate(350, 100)">
+    <rect width="200" height="30" class="entity-title" rx="5" ry="5" />
+    <text x="100" y="20" text-anchor="middle" class="title-text">MODEL_REGISTRY</text>
+    <rect width="200" height="240" y="30" class="entity" rx="0" ry="0" />
+    <text x="10" y="50" class="attribute pk">MODEL_ID (PK)</text>
+    <text x="10" y="70" class="attribute fk">TYPE_ID (FK)</text>
+    <text x="10" y="90" class="attribute">MODEL_NAME</text>
+    <text x="10" y="110" class="attribute">MODEL_VERSION</text>
+    <text x="10" y="130" class="attribute">MODEL_DESCRIPTION</text>
+    <text x="10" y="150" class="attribute">SOURCE_DATABASE</text>
+    <text x="10" y="170" class="attribute">SOURCE_SCHEMA</text>
+    <text x="10" y="190" class="attribute">SOURCE_TABLE_NAME</text>
+    <text x="10" y="210" class="attribute">EFF_DATE</text>
+    <text x="10" y="230" class="attribute">EXP_DATE</text>
+    <text x="10" y="250" class="attribute">IS_ACTIVE</text>
+    <text x="10" y="270" class="attribute">MODEL_CATEGORY</text>
+  </g>
+
+  <!-- MODEL_PARAMETERS Entity -->
+  <g transform="translate(50, 350)">
+    <rect width="200" height="30" class="entity-title" rx="5" ry="5" />
+    <text x="100" y="20" text-anchor="middle" class="title-text">MODEL_PARAMETERS</text>
+    <rect width="200" height="200" y="30" class="entity" rx="0" ry="0" />
+    <text x="10" y="50" class="attribute pk">PARAMETER_ID (PK)</text>
+    <text x="10" y="70" class="attribute fk">MODEL_ID (FK)</text>
+    <text x="10" y="90" class="attribute">PARAMETER_NAME</text>
+    <text x="10" y="110" class="attribute">PARAMETER_VALUE</text>
+    <text x="10" y="130" class="attribute">PARAMETER_TYPE</text>
+    <text x="10" y="150" class="attribute">PARAMETER_FORMAT</text>
+    <text x="10" y="170" class="attribute">IS_CALIBRATED</text>
+    <text x="10" y="190" class="attribute">LAST_CALIBRATION_DATE</text>
+    <text x="10" y="210" class="attribute">EFF_DATE</text>
+    <text x="10" y="230" class="attribute">IS_ACTIVE</text>
+  </g>
+
+  <!-- MODEL_SOURCE_TABLES Entity -->
+  <g transform="translate(350, 350)">
+    <rect width="200" height="30" class="entity-title" rx="5" ry="5" />
+    <text x="100" y="20" text-anchor="middle" class="title-text">MODEL_SOURCE_TABLES</text>
+    <rect width="200" height="200" y="30" class="entity" rx="0" ry="0" />
+    <text x="10" y="50" class="attribute pk">SOURCE_TABLE_ID (PK)</text>
+    <text x="10" y="70" class="attribute">SOURCE_DATABASE</text>
+    <text x="10" y="90" class="attribute">SOURCE_SCHEMA</text>
+    <text x="10" y="110" class="attribute">SOURCE_TABLE_NAME</text>
+    <text x="10" y="130" class="attribute">TABLE_TYPE</text>
+    <text x="10" y="150" class="attribute">TABLE_DESCRIPTION</text>
+    <text x="10" y="170" class="attribute">DATA_OWNER</text>
+    <text x="10" y="190" class="attribute">UPDATE_FREQUENCY</text>
+    <text x="10" y="210" class="attribute">DATA_QUALITY_SCORE</text>
+    <text x="10" y="230" class="attribute">IS_ACTIVE</text>
+  </g>
+
+  <!-- MODEL_TABLE_USAGE Entity -->
+  <g transform="translate(50, 650)">
+    <rect width="200" height="30" class="entity-title" rx="5" ry="5" />
+    <text x="100" y="20" text-anchor="middle" class="title-text">MODEL_TABLE_USAGE</text>
+    <rect width="200" height="160" y="30" class="entity" rx="0" ry="0" />
+    <text x="10" y="50" class="attribute pk">USAGE_ID (PK)</text>
+    <text x="10" y="70" class="attribute fk">MODEL_ID (FK)</text>
+    <text x="10" y="90" class="attribute fk">SOURCE_TABLE_ID (FK)</text>
+    <text x="10" y="110" class="attribute">USAGE_PURPOSE</text>
+    <text x="10" y="130" class="attribute">PRIORITY</text>
+    <text x="10" y="150" class="attribute">EFF_DATE</text>
+    <text x="10" y="170" class="attribute">EXP_DATE</text>
+    <text x="10" y="190" class="attribute">IS_ACTIVE</text>
+  </g>
+
+  <!-- MODEL_VALIDATION_RESULTS Entity -->
+  <g transform="translate(350, 650)">
+    <rect width="200" height="30" class="entity-title" rx="5" ry="5" />
+    <text x="100" y="20" text-anchor="middle" class="title-text">MODEL_VALIDATION_RESULTS</text>
+    <rect width="200" height="220" y="30" class="entity" rx="0" ry="0" />
+    <text x="10" y="50" class="attribute pk">VALIDATION_ID (PK)</text>
+    <text x="10" y="70" class="attribute fk">MODEL_ID (FK)</text>
+    <text x="10" y="90" class="attribute">VALIDATION_DATE</text>
+    <text x="10" y="110" class="attribute">VALIDATION_TYPE</text>
+    <text x="10" y="130" class="attribute">DATA_SAMPLE_SIZE</text>
+    <text x="10" y="150" class="attribute">GINI</text>
+    <text x="10" y="170" class="attribute">KS_STATISTIC</text>
+    <text x="10" y="190" class="attribute">PSI</text>
+    <text x="10" y="210" class="attribute">ACCURACY</text>
+    <text x="10" y="230" class="attribute">PRECISION</text>
+    <text x="10" y="250" class="attribute">VALIDATION_STATUS</text>
+  </g>
+
+  <!-- MODEL_SEGMENT_MAPPING Entity -->
+  <g transform="translate(50, 900)">
+    <rect width="200" height="30" class="entity-title" rx="5" ry="5" />
+    <text x="100" y="20" text-anchor="middle" class="title-text">MODEL_SEGMENT_MAPPING</text>
+    <rect width="200" height="160" y="30" class="entity" rx="0" ry="0" />
+    <text x="10" y="50" class="attribute pk">MAPPING_ID (PK)</text>
+    <text x="10" y="70" class="attribute fk">MODEL_ID (FK)</text>
+    <text x="10" y="90" class="attribute">SEGMENT_NAME</text>
+    <text x="10" y="110" class="attribute">SEGMENT_CRITERIA</text>
+    <text x="10" y="130" class="attribute">PRIORITY</text>
+    <text x="10" y="150" class="attribute">EFF_DATE</text>
+    <text x="10" y="170" class="attribute">EXP_DATE</text>
+    <text x="10" y="190" class="attribute">IS_ACTIVE</text>
+  </g>
+
+  <!-- MODEL_DATA_QUALITY_LOG Entity -->
+  <g transform="translate(350, 900)">
+    <rect width="200" height="30" class="entity-title" rx="5" ry="5" />
+    <text x="100" y="20" text-anchor="middle" class="title-text">MODEL_DATA_QUALITY_LOG</text>
+    <rect width="200" height="170" y="30" class="entity" rx="0" ry="0" />
+    <text x="10" y="50" class="attribute pk">LOG_ID (PK)</text>
+    <text x="10" y="70" class="attribute fk">SOURCE_TABLE_ID (FK)</text>
+    <text x="10" y="90" class="attribute fk">COLUMN_ID (FK)</text>
+    <text x="10" y="110" class="attribute">PROCESS_DATE</text>
+    <text x="10" y="130" class="attribute">ISSUE_TYPE</text>
+    <text x="10" y="150" class="attribute">SEVERITY</text>
+    <text x="10" y="170" class="attribute">REMEDIATION_STATUS</text>
+    <text x="10" y="190" class="attribute">IMPACT_DESCRIPTION</text>
+  </g>
+
+  <!-- MODEL_SOURCE_REFRESH_LOG Entity -->
+  <g transform="translate(50, 1150)">
+    <rect width="200" height="30" class="entity-title" rx="5" ry="5" />
+    <text x="100" y="20" text-anchor="middle" class="title-text">MODEL_SOURCE_REFRESH_LOG</text>
+    <rect width="200" height="140" y="30" class="entity" rx="0" ry="0" />
+    <text x="10" y="50" class="attribute pk">REFRESH_ID (PK)</text>
+    <text x="10" y="70" class="attribute fk">SOURCE_TABLE_ID (FK)</text>
+    <text x="10" y="90" class="attribute">PROCESS_DATE</text>
+    <text x="10" y="110" class="attribute">REFRESH_STATUS</text>
+    <text x="10" y="130" class="attribute">REFRESH_TYPE</text>
+    <text x="10" y="150" class="attribute">RECORDS_PROCESSED</text>
+    <text x="10" y="170" class="attribute">ERROR_MESSAGE</text>
+  </g>
+
+  <!-- Feature Store Entities -->
+  <!-- FEATURE_REGISTRY Entity -->
+  <g transform="translate(700, 100)">
+    <rect width="200" height="30" class="feature-entity-title" rx="5" ry="5" />
+    <text x="100" y="20" text-anchor="middle" class="title-text">FEATURE_REGISTRY</text>
+    <rect width="200" height="220" y="30" class="feature-entity" rx="0" ry="0" />
+    <text x="10" y="50" class="attribute pk">FEATURE_ID (PK)</text>
+    <text x="10" y="70" class="attribute">FEATURE_NAME</text>
+    <text x="10" y="90" class="attribute">FEATURE_DESCRIPTION</text>
+    <text x="10" y="110" class="attribute">DATA_TYPE</text>
+    <text x="10" y="130" class="attribute">FEATURE_TYPE</text>
+    <text x="10" y="150" class="attribute">BUSINESS_OWNER</text>
+    <text x="10" y="170" class="attribute">TECHNICAL_OWNER</text>
+    <text x="10" y="190" class="attribute">CREATED_DATE</text>
+    <text x="10" y="210" class="attribute">LAST_MODIFIED_DATE</text>
+    <text x="10" y="230" class="attribute">IS_ACTIVE</text>
+    <text x="10" y="250" class="attribute">VERSION</text>
+  </g>
+
+  <!-- FEATURE_TRANSFORMATIONS Entity -->
+  <g transform="translate(1000, 100)">
+    <rect width="200" height="30" class="feature-entity-title" rx="5" ry="5" />
+    <text x="100" y="20" text-anchor="middle" class="title-text">FEATURE_TRANSFORMATIONS</text>
+    <rect width="200" height="200" y="30" class="feature-entity" rx="0" ry="0" />
+    <text x="10" y="50" class="attribute pk">TRANSFORMATION_ID (PK)</text>
+    <text x="10" y="70" class="attribute fk">FEATURE_ID (FK)</text>
+    <text x="10" y="90" class="attribute">TRANSFORMATION_NAME</text>
+    <text x="10" y="110" class="attribute">TRANSFORMATION_TYPE</text>
+    <text x="10" y="130" class="attribute">TRANSFORMATION_SQL</text>
+    <text x="10" y="150" class="attribute">TRANSFORMATION_PARAMS</text>
+    <text x="10" y="170" class="attribute">SEQUENCE_ORDER</text>
+    <text x="10" y="190" class="attribute">IS_ACTIVE</text>
+    <text x="10" y="210" class="attribute">CREATED_DATE</text>
+    <text x="10" y="230" class="attribute">LAST_MODIFIED_DATE</text>
+  </g>
+
+  <!-- FEATURE_SOURCE_TABLES Entity -->
+  <g transform="translate(700, 350)">
+    <rect width="200" height="30" class="feature-entity-title" rx="5" ry="5" />
+    <text x="100" y="20" text-anchor="middle" class="title-text">FEATURE_SOURCE_TABLES</text>
+    <rect width="200" height="170" y="30" class="feature-entity" rx="0" ry="0" />
+    <text x="10" y="50" class="attribute pk">FEATURE_SOURCE_ID (PK)</text>
+    <text x="10" y="70" class="attribute fk">FEATURE_ID (FK)</text>
+    <text x="10" y="90" class="attribute">SOURCE_DATABASE</text>
+    <text x="10" y="110" class="attribute">SOURCE_SCHEMA</text>
+    <text x="10" y="130" class="attribute">SOURCE_TABLE</text>
+    <text x="10" y="150" class="attribute">SOURCE_COLUMN</text>
+    <text x="10" y="170" class="attribute">IS_PRIMARY_SOURCE</text>
+    <text x="10" y="190" class="attribute">CREATED_DATE</text>
+    <text x="10" y="210" class="attribute">IS_ACTIVE</text>
+  </g>
+
+  <!-- FEATURE_VALUES Entity -->
+  <g transform="translate(1000, 350)">
+    <rect width="200" height="30" class="feature-entity-title" rx="5" ry="5" />
+    <text x="100" y="20" text-anchor="middle" class="title-text">FEATURE_VALUES</text>
+    <rect width="200" height="170" y="30" class="feature-entity" rx="0" ry="0" />
+    <text x="10" y="50" class="attribute pk">FEATURE_VALUE_ID (PK)</text>
+    <text x="10" y="70" class="attribute fk">FEATURE_ID (FK)</text>
+    <text x="10" y="90" class="attribute">ENTITY_ID</text>
+    <text x="10" y="110" class="attribute">ENTITY_TYPE</text>
+    <text x="10" y="130" class="attribute">VALUE</text>
+    <text x="10" y="150" class="attribute">CALCULATION_TIME</text>
+    <text x="10" y="170" class="attribute">AS_OF_DATE</text>
+    <text x="10" y="190" class="attribute">IS_LATEST</text>
+    <text x="10" y="210" class="attribute">STATUS</text>
+  </g>
+
+  <!-- FEATURE_STATS Entity -->
+  <g transform="translate(700, 560)">
+    <rect width="200" height="30" class="feature-entity-title" rx="5" ry="5" />
+    <text x="100" y="20" text-anchor="middle" class="title-text">FEATURE_STATS</text>
+    <rect width="200" height="200" y="30" class="feature-entity" rx="0" ry="0" />
+    <text x="10" y="50" class="attribute pk">STAT_ID (PK)</text>
+    <text x="10" y="70" class="attribute fk">FEATURE_ID (FK)</text>
+    <text x="10" y="90" class="attribute">STAT_DATE</text>
+    <text x="10" y="110" class="attribute">MEAN</text>
+    <text x="10" y="130" class="attribute">MEDIAN</text>
+    <text x="10" y="150" class="attribute">MIN</text>
+    <text x="10" y="170" class="attribute">MAX</text>
+    <text x="10" y="190" class="attribute">STD_DEV</text>
+    <text x="10" y="210" class="attribute">MISSING_PCT</text>
+    <text x="10" y="230" class="attribute">DISTRIBUTION_JSON</text>
+  </g>
+
+  <!-- FEATURE_DEPENDENCIES Entity -->
+  <g transform="translate(1000, 560)">
+    <rect width="200" height="30" class="feature-entity-title" rx="5" ry="5" />
+    <text x="100" y="20" text-anchor="middle" class="title-text">FEATURE_DEPENDENCIES</text>
+    <rect width="200" height="150" y="30" class="feature-entity" rx="0" ry="0" />
+    <text x="10" y="50" class="attribute pk">DEPENDENCY_ID (PK)</text>
+    <text x="10" y="70" class="attribute fk">FEATURE_ID (FK)</text>
+    <text x="10" y="90" class="attribute fk">PARENT_FEATURE_ID (FK)</text>
+    <text x="10" y="110" class="attribute">DEPENDENCY_TYPE</text>
+    <text x="10" y="130" class="attribute">DEPENDENCY_STRENGTH</text>
+    <text x="10" y="150" class="attribute">DESCRIPTION</text>
+    <text x="10" y="170" class="attribute">CREATED_DATE</text>
+    <text x="10" y="190" class="attribute">IS_ACTIVE</text>
+  </g>
+
+  <!-- FEATURE_MODEL_MAPPING Entity -->
+  <g transform="translate(700, 800)">
+    <rect width="200" height="30" class="feature-entity-title" rx="5" ry="5" />
+    <text x="100" y="20" text-anchor="middle" class="title-text">FEATURE_MODEL_MAPPING</text>
+    <rect width="200" height="180" y="30" class="feature-entity" rx="0" ry="0" />
+    <text x="10" y="50" class="attribute pk">MAPPING_ID (PK)</text>
+    <text x="10" y="70" class="attribute fk">MODEL_ID (FK)</text>
+    <text x="10" y="90" class="attribute fk">FEATURE_ID (FK)</text>
+    <text x="10" y="110" class="attribute">IMPORTANCE_SCORE</text>
+    <text x="10" y="130" class="attribute">FEATURE_WEIGHT</text>
+    <text x="10" y="150" class="attribute">PURPOSE</text>
+    <text x="10" y="170" class="attribute">EFF_DATE</text>
+    <text x="10" y="190" class="attribute">EXP_DATE</text>
+    <text x="10" y="210" class="attribute">IS_ACTIVE</text>
+  </g>
+
+  <!-- FEATURE_REFRESH_LOG Entity -->
+  <g transform="translate(1000, 800)">
+    <rect width="200" height="30" class="feature-entity-title" rx="5" ry="5" />
+    <text x="100" y="20" text-anchor="middle" class="title-text">FEATURE_REFRESH_LOG</text>
+    <rect width="200" height="180" y="30" class="feature-entity" rx="0" ry="0" />
+    <text x="10" y="50" class="attribute pk">REFRESH_ID (PK)</text>
+    <text x="10" y="70" class="attribute fk">FEATURE_ID (FK)</text>
+    <text x="10" y="90" class="attribute">REFRESH_DATE</text>
+    <text x="10" y="110" class="attribute">START_TIME</text>
+    <text x="10" y="130" class="attribute">END_TIME</text>
+    <text x="10" y="150" class="attribute">STATUS</text>
+    <text x="10" y="170" class="attribute">RECORDS_PROCESSED</text>
+    <text x="10" y="190" class="attribute">ERROR_MESSAGE</text>
+    <text x="10" y="210" class="attribute">TRIGGERED_BY</text>
+  </g>
+
+  <!-- Relationships for Model Registry -->
+  <!-- MODEL_TYPE to MODEL_REGISTRY -->
+  <path d="M 250 165 L 350 165" class="relationship" marker-end="url(#arrow)" />
+  <text x="300" y="155" class="cardinality">1:N</text>
+
+  <!-- MODEL_REGISTRY to MODEL_PARAMETERS -->
+  <path d="M 350 220 L 250 220 L 250 350" class="relationship" marker-end="url(#arrow)" />
+  <text x="280" y="340" class="cardinality">1:N</text>
+
+  <!-- MODEL_REGISTRY to MODEL_TABLE_USAGE -->
+  <path d="M 350 240 L 150 240 L 150 650" class="relationship" marker-end="url(#arrow)" />
+  <text x="160" y="500" class="cardinality">1:N</text>
+
+  <!-- MODEL_SOURCE_TABLES to MODEL_TABLE_USAGE -->
+  <path d="M 400 550 L 400 600 L 150 600 L 150 650" class="relationship" marker-end="url(#arrow)" />
+  <text x="270" y="590" class="cardinality">1:N</text>
+
+  <!-- MODEL_REGISTRY to MODEL_VALIDATION_RESULTS -->
+  <path d="M 450 340 L 450 650" class="relationship" marker-end="url(#arrow)" />
+  <text x="460" y="500" class="cardinality">1:N</text>
+
+  <!-- MODEL_REGISTRY to MODEL_SEGMENT_MAPPING -->
+  <path d="M 350 260 L 120 260 L 120 900" class="relationship" marker-end="url(#arrow)" />
+  <text x="130" y="600" class="cardinality">1:N</text>
+
+  <!-- MODEL_SOURCE_TABLES to MODEL_DATA_QUALITY_LOG -->
+  <path d="M 450 550 L 450 900" class="relationship" marker-end="url(#arrow)" />
+  <text x="460" y="750" class="cardinality">1:N</text>
+
+  <!-- MODEL_SOURCE_TABLES to MODEL_SOURCE_REFRESH_LOG -->
+  <path d="M 350 450 L 150 450 L 150 1150" class="relationship" marker-end="url(#arrow)" />
+  <text x="160" y="800" class="cardinality">1:N</text>
+
+  <!-- Relationships for Feature Store -->
+  <!-- FEATURE_REGISTRY to FEATURE_TRANSFORMATIONS -->
+  <path d="M 900 165 L 1000 165" class="feature-relationship" marker-end="url(#arrow)" />
+  <text x="950" y="155" class="cardinality">1:N</text>
+
+  <!-- FEATURE_REGISTRY to FEATURE_SOURCE_TABLES -->
+  <path d="M 800 320 L 800 350" class="feature-relationship" marker-end="url(#arrow)" />
+  <text x="810" y="335" class="cardinality">1:N</text>
+
+  <!-- FEATURE_REGISTRY to FEATURE_VALUES -->
+  <path d="M 900 220 L 1050 220 L 1050 350" class="feature-relationship" marker-end="url(#arrow)" />
+  <text x="1060" y="300" class="cardinality">1:N</text>
+
+  <!-- FEATURE_REGISTRY to FEATURE_STATS -->
+  <path d="M 750 320 L 750 560" class="feature-relationship" marker-end="url(#arrow)" />
+  <text x="760" y="450" class="cardinality">1:N</text>
+
+  <!-- FEATURE_REGISTRY to FEATURE_DEPENDENCIES -->
+  <path d="M 900 250 L 1100 250 L 1100 560" class="feature-relationship" marker-end="url(#arrow)" />
+  <text x="1110" y="400" class="cardinality">1:N</text>
+
+  <!-- FEATURE_REGISTRY to FEATURE_DEPENDENCIES (Parent) -->
+  <path d="M 900 270 L 1150 270 L 1150 580" class="feature-relationship" marker-end="url(#arrow)" />
+  <text x="1160" y="420" class="cardinality">1:N</text>
+
+  <!-- FEATURE_REGISTRY to FEATURE_MODEL_MAPPING -->
+  <path d="M 750 320 L 750 530 L 700 530 L 700 800" class="feature-relationship" marker-end="url(#arrow)" />
+  <text x="710" y="600" class="cardinality">1:N</text>
+
+  <!-- FEATURE_REGISTRY to FEATURE_REFRESH_LOG -->
+  <path d="M 900 280 L 1200 280 L 1200 800" class="feature-relationship" marker-end="url(#arrow)" />
+  <text x="1210" y="550" class="cardinality">1:N</text>
+
+  <!-- Cross-component Relationships -->
+  <!-- MODEL_REGISTRY to FEATURE_MODEL_MAPPING -->
+  <path d="M 550 200 L 650 200 L 650 815 L 700 815" class="mixed-relationship" marker-end="url(#arrow)" />
+  <text x="670" y="500" class="cardinality">1:N</text>
+
+  <!-- MODEL_SOURCE_TABLES to FEATURE_SOURCE_TABLES -->
+  <path d="M 550 400 L 700 400" class="mixed-relationship" marker-end="url(#arrow)" />
+  <text x="625" y="390" class="cardinality">1:N</text>
+
+  <!-- Define arrow marker -->
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+      <polygon points="0,0 10,5 0,10" fill="#555"/>
+    </marker>
+  </defs>
+</svg>

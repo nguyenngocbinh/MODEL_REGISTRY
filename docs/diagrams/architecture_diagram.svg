@@ -1,0 +1,282 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 1100" width="100%" height="100%">
+  <!-- Styles -->
+  <style>
+    .box { stroke-width: 2; rx: 10; ry: 10; }
+    .db { fill: #e6f3ff; stroke: #3498db; }
+    .feature-db { fill: #e3f5ec; stroke: #20c997; }
+    .service { fill: #e5f7e5; stroke: #27ae60; }
+    .feature-service { fill: #edf8e8; stroke: #38d168; }
+    .ui { fill: #fff5e5; stroke: #f39c12; }
+    .external { fill: #f5e5f5; stroke: #8e44ad; }
+    .title { font-family: Arial; font-size: 14px; font-weight: bold; }
+    .subtitle { font-family: Arial; font-size: 12px; }
+    .conn { stroke: #555; stroke-width: 1.5; fill: none; }
+    .feature-conn { stroke: #20c997; stroke-width: 1.5; fill: none; }
+    .mixed-conn { stroke: #9c59b6; stroke-width: 1.5; fill: none; }
+    .arrow { fill: #555; }
+    .feature-arrow { fill: #20c997; }
+    .mixed-arrow { fill: #9c59b6; }
+    .label { font-family: Arial; font-size: 12px; fill: #333; }
+    .diagram-title { font-family: Arial; font-size: 20px; font-weight: bold; fill: #333; }
+    .section-title { font-family: Arial; font-size: 16px; font-weight: bold; fill: #555; font-style: italic; }
+    .layer { fill: #f9f9f9; stroke: #ddd; stroke-width: 1; stroke-dasharray: 5,5; }
+    .feature-layer { fill: #f9fffa; stroke: #ddd; stroke-width: 1; stroke-dasharray: 5,5; }
+    .legend-box { stroke-width: 1; width: 20px; height: 15px; }
+    .legend-text { font-family: Arial; font-size: 12px; fill: #333; }
+  </style>
+
+  <!-- Title -->
+  <text x="700" y="30" text-anchor="middle" class="diagram-title">Architecture Diagram: Model Registry with Feature Store</text>
+
+  <!-- Layers -->
+  <!-- Data Layer -->
+  <rect x="50" y="100" width="1300" height="200" class="layer" />
+  <text x="100" y="120" class="section-title">Data Layer</text>
+
+  <!-- Business Logic Layer - Model Registry Components -->
+  <rect x="50" y="320" width="650" height="300" class="layer" />
+  <text x="100" y="340" class="section-title">Business Logic Layer - Model Registry Components</text>
+
+  <!-- Business Logic Layer - Feature Store Components -->
+  <rect x="720" y="320" width="630" height="300" class="feature-layer" />
+  <text x="770" y="340" class="section-title">Business Logic Layer - Feature Store Components</text>
+
+  <!-- Presentation Layer -->
+  <rect x="50" y="640" width="1300" height="200" class="layer" />
+  <text x="100" y="660" class="section-title">Presentation Layer</text>
+
+  <!-- Integration Layer -->
+  <rect x="50" y="860" width="1300" height="150" class="layer" />
+  <text x="100" y="880" class="section-title">Integration Layer</text>
+
+  <!-- Data Layer Components -->
+  <!-- Model Registry Databases -->
+  <rect x="150" y="150" width="140" height="100" class="box db" />
+  <text x="220" y="185" text-anchor="middle" class="title">Model Registry</text>
+  <text x="220" y="205" text-anchor="middle" class="subtitle">SQL Database</text>
+  
+  <rect x="320" y="150" width="140" height="100" class="box db" />
+  <text x="390" y="185" text-anchor="middle" class="title">Model Storage</text>
+  <text x="390" y="205" text-anchor="middle" class="subtitle">Model Files & Docs</text>
+  
+  <rect x="490" y="150" width="140" height="100" class="box db" />
+  <text x="560" y="185" text-anchor="middle" class="title">Model Audit</text>
+  <text x="560" y="205" text-anchor="middle" class="subtitle">Change Logs</text>
+
+  <!-- Feature Store Databases -->
+  <rect x="770" y="150" width="140" height="100" class="box feature-db" />
+  <text x="840" y="185" text-anchor="middle" class="title">Feature Registry</text>
+  <text x="840" y="205" text-anchor="middle" class="subtitle">Metadata DB</text>
+  
+  <rect x="940" y="150" width="140" height="100" class="box feature-db" />
+  <text x="1010" y="185" text-anchor="middle" class="title">Online Feature</text>
+  <text x="1010" y="205" text-anchor="middle" class="subtitle">Store</text>
+  
+  <rect x="1110" y="150" width="140" height="100" class="box feature-db" />
+  <text x="1180" y="185" text-anchor="middle" class="title">Offline Feature</text>
+  <text x="1180" y="205" text-anchor="middle" class="subtitle">Store</text>
+
+  <!-- Model Registry Business Layer Components -->
+  <rect x="100" y="380" width="140" height="90" class="box service" />
+  <text x="170" y="415" text-anchor="middle" class="title">Model Registry</text>
+  <text x="170" y="435" text-anchor="middle" class="subtitle">Service</text>
+  
+  <rect x="100" y="500" width="140" height="90" class="box service" />
+  <text x="170" y="535" text-anchor="middle" class="title">Model Validation</text>
+  <text x="170" y="555" text-anchor="middle" class="subtitle">Service</text>
+  
+  <rect x="270" y="380" width="140" height="90" class="box service" />
+  <text x="340" y="415" text-anchor="middle" class="title">Data Quality</text>
+  <text x="340" y="435" text-anchor="middle" class="subtitle">Service</text>
+  
+  <rect x="270" y="500" width="140" height="90" class="box service" />
+  <text x="340" y="535" text-anchor="middle" class="title">Model Selection</text>
+  <text x="340" y="555" text-anchor="middle" class="subtitle">Service</text>
+  
+  <rect x="440" y="380" width="140" height="90" class="box service" />
+  <text x="510" y="415" text-anchor="middle" class="title">Source Monitoring</text>
+  <text x="510" y="435" text-anchor="middle" class="subtitle">Service</text>
+  
+  <rect x="440" y="500" width="140" height="90" class="box service" />
+  <text x="510" y="535" text-anchor="middle" class="title">Reporting</text>
+  <text x="510" y="555" text-anchor="middle" class="subtitle">Service</text>
+
+  <!-- Feature Store Business Layer Components -->
+  <rect x="770" y="380" width="140" height="90" class="box feature-service" />
+  <text x="840" y="415" text-anchor="middle" class="title">Feature Registry</text>
+  <text x="840" y="435" text-anchor="middle" class="subtitle">Service</text>
+  
+  <rect x="770" y="500" width="140" height="90" class="box feature-service" />
+  <text x="840" y="535" text-anchor="middle" class="title">Feature Validation</text>
+  <text x="840" y="555" text-anchor="middle" class="subtitle">Service</text>
+  
+  <rect x="940" y="380" width="140" height="90" class="box feature-service" />
+  <text x="1010" y="415" text-anchor="middle" class="title">Feature Extraction</text>
+  <text x="1010" y="435" text-anchor="middle" class="subtitle">Service</text>
+  
+  <rect x="940" y="500" width="140" height="90" class="box feature-service" />
+  <text x="1010" y="535" text-anchor="middle" class="title">Feature Drift</text>
+  <text x="1010" y="555" text-anchor="middle" class="subtitle">Monitoring</text>
+  
+  <rect x="1110" y="380" width="140" height="90" class="box feature-service" />
+  <text x="1180" y="415" text-anchor="middle" class="title">Feature Store</text>
+  <text x="1180" y="435" text-anchor="middle" class="subtitle">API Service</text>
+  
+  <rect x="1110" y="500" width="140" height="90" class="box feature-service" />
+  <text x="1180" y="535" text-anchor="middle" class="title">Feature Refresh</text>
+  <text x="1180" y="555" text-anchor="middle" class="subtitle">Scheduler</text>
+
+  <!-- Presentation Layer Components -->
+  <!-- Model Registry UIs -->
+  <rect x="100" y="700" width="140" height="100" class="box ui" />
+  <text x="170" y="745" text-anchor="middle" class="title">Admin Dashboard</text>
+  <text x="170" y="765" text-anchor="middle" class="subtitle">Web UI</text>
+  
+  <rect x="270" y="700" width="140" height="100" class="box ui" />
+  <text x="340" y="745" text-anchor="middle" class="title">Model Developer</text>
+  <text x="340" y="765" text-anchor="middle" class="subtitle">UI</text>
+  
+  <rect x="440" y="700" width="140" height="100" class="box ui" />
+  <text x="510" y="745" text-anchor="middle" class="title">Data Steward</text>
+  <text x="510" y="765" text-anchor="middle" class="subtitle">UI</text>
+
+  <!-- Feature Store UIs -->
+  <rect x="770" y="700" width="140" height="100" class="box ui" />
+  <text x="840" y="745" text-anchor="middle" class="title">Feature Catalog</text>
+  <text x="840" y="765" text-anchor="middle" class="subtitle">UI</text>
+  
+  <rect x="940" y="700" width="140" height="100" class="box ui" />
+  <text x="1010" y="745" text-anchor="middle" class="title">Feature Developer</text>
+  <text x="1010" y="765" text-anchor="middle" class="subtitle">UI</text>
+  
+  <rect x="1110" y="700" width="140" height="100" class="box ui" />
+  <text x="1180" y="745" text-anchor="middle" class="title">Feature Analytics</text>
+  <text x="1180" y="765" text-anchor="middle" class="subtitle">Dashboard</text>
+
+  <!-- Integration Layer Components -->
+  <rect x="100" y="910" width="160" height="70" class="box service" />
+  <text x="180" y="945" text-anchor="middle" class="title">REST API Gateway</text>
+  
+  <rect x="300" y="910" width="160" height="70" class="box service" />
+  <text x="380" y="945" text-anchor="middle" class="title">Batch Job Scheduler</text>
+  
+  <rect x="500" y="910" width="160" height="70" class="box service" />
+  <text x="580" y="945" text-anchor="middle" class="title">Model-Feature Bridge</text>
+  
+  <rect x="700" y="910" width="160" height="70" class="box feature-service" />
+  <text x="780" y="945" text-anchor="middle" class="title">Feature API Gateway</text>
+  
+  <rect x="900" y="910" width="160" height="70" class="box feature-service" />
+  <text x="980" y="945" text-anchor="middle" class="title">ETL Orchestrator</text>
+  
+  <rect x="1100" y="910" width="160" height="70" class="box feature-service" />
+  <text x="1180" y="945" text-anchor="middle" class="title">Feature Export Service</text>
+
+  <!-- External Systems -->
+  <rect x="605" y="150" width="140" height="40" class="box external" />
+  <text x="675" y="175" text-anchor="middle" class="subtitle">Data Warehouse</text>
+  
+  <rect x="605" y="200" width="140" height="40" class="box external" />
+  <text x="675" y="225" text-anchor="middle" class="subtitle">External Data Sources</text>
+  
+  <rect x="605" y="425" width="140" height="40" class="box external" />
+  <text x="675" y="450" text-anchor="middle" class="subtitle">Risk Models</text>
+  
+  <rect x="605" y="500" width="140" height="40" class="box external" />
+  <text x="675" y="525" text-anchor="middle" class="subtitle">ML Training Systems</text>
+
+  <!-- Connections for Model Registry -->
+  <!-- Data Layer to Business Layer -->
+  <path d="M 170 250 L 170 380" class="conn" marker-end="url(#arrow1)" />
+  <path d="M 350 250 L 350 380" class="conn" marker-end="url(#arrow1)" />
+  <path d="M 520 250 L 520 380" class="conn" marker-end="url(#arrow1)" />
+  
+  <!-- Business Layer Interconnections -->
+  <path d="M 170 470 L 170 500" class="conn" marker-end="url(#arrow1)" />
+  <path d="M 240 425 L 270 425" class="conn" marker-end="url(#arrow1)" />
+  <path d="M 240 545 L 270 545" class="conn" marker-end="url(#arrow1)" />
+  <path d="M 410 425 L 440 425" class="conn" marker-end="url(#arrow1)" />
+  <path d="M 410 545 L 440 545" class="conn" marker-end="url(#arrow1)" />
+  
+  <!-- Business Layer to Presentation Layer -->
+  <path d="M 170 590 L 170 700" class="conn" marker-end="url(#arrow1)" />
+  <path d="M 340 590 L 340 700" class="conn" marker-end="url(#arrow1)" />
+  <path d="M 510 590 L 510 700" class="conn" marker-end="url(#arrow1)" />
+  
+  <!-- Business Layer to Integration Layer -->
+  <path d="M 170 590 L 170 640 L 180 640 L 180 910" class="conn" marker-end="url(#arrow1)" />
+  <path d="M 340 590 L 340 640 L 380 640 L 380 910" class="conn" marker-end="url(#arrow1)" />
+  <path d="M 510 590 L 510 640 L 580 640 L 580 910" class="conn" marker-end="url(#arrow1)" />
+
+  <!-- Connections for Feature Store -->
+  <!-- Data Layer to Business Layer -->
+  <path d="M 840 250 L 840 380" class="feature-conn" marker-end="url(#arrow2)" />
+  <path d="M 1010 250 L 1010 380" class="feature-conn" marker-end="url(#arrow2)" />
+  <path d="M 1180 250 L 1180 380" class="feature-conn" marker-end="url(#arrow2)" />
+  
+  <!-- Business Layer Interconnections -->
+  <path d="M 840 470 L 840 500" class="feature-conn" marker-end="url(#arrow2)" />
+  <path d="M 910 425 L 940 425" class="feature-conn" marker-end="url(#arrow2)" />
+  <path d="M 910 545 L 940 545" class="feature-conn" marker-end="url(#arrow2)" />
+  <path d="M 1080 425 L 1110 425" class="feature-conn" marker-end="url(#arrow2)" />
+  <path d="M 1080 545 L 1110 545" class="feature-conn" marker-end="url(#arrow2)" />
+  
+  <!-- Business Layer to Presentation Layer -->
+  <path d="M 840 590 L 840 700" class="feature-conn" marker-end="url(#arrow2)" />
+  <path d="M 1010 590 L 1010 700" class="feature-conn" marker-end="url(#arrow2)" />
+  <path d="M 1180 590 L 1180 700" class="feature-conn" marker-end="url(#arrow2)" />
+  
+  <!-- Business Layer to Integration Layer -->
+  <path d="M 840 590 L 840 640 L 780 640 L 780 910" class="feature-conn" marker-end="url(#arrow2)" />
+  <path d="M 1010 590 L 1010 640 L 980 640 L 980 910" class="feature-conn" marker-end="url(#arrow2)" />
+  <path d="M 1180 590 L 1180 640 L 1180 910" class="feature-conn" marker-end="url(#arrow2)" />
+
+  <!-- Cross-System Connections -->
+  <path d="M 580 480 L 605 480" class="conn" marker-end="url(#arrow1)" />
+  <path d="M 580 540 L 605 540" class="conn" marker-end="url(#arrow1)" />
+  
+  <path d="M 740 425 L 770 425" class="mixed-conn" marker-end="url(#arrow3)" />
+  <path d="M 740 545 L 770 545" class="mixed-conn" marker-end="url(#arrow3)" />
+  
+  <path d="M 580 910 L 660 910 L 660 945 L 700 945" class="mixed-conn" marker-end="url(#arrow3)" />
+  <path d="M 580 970 L 660 970 L 660 980 L 1100 980" class="mixed-conn" marker-end="url(#arrow3)" />
+
+  <!-- External Connections -->
+  <path d="M 675 190 L 675 170 L 600 170 L 600 200 L 550 200" class="conn" marker-end="url(#arrow1)" />
+  <path d="M 675 240 L 675 260 L 600 260 L 600 230 L 550 230" class="conn" marker-end="url(#arrow1)" />
+  
+  <path d="M 675 190 L 675 170 L 750 170 L 750 200 L 770 200" class="feature-conn" marker-end="url(#arrow2)" />
+  <path d="M 675 240 L 675 260 L 750 260 L 750 230 L 770 230" class="feature-conn" marker-end="url(#arrow2)" />
+
+  <!-- Legend -->
+  <rect x="50" y="1030" width="20" height="15" class="box db" />
+  <text x="75" y="1043" class="legend-text">Model Registry DB</text>
+  
+  <rect x="200" y="1030" width="20" height="15" class="box feature-db" />
+  <text x="225" y="1043" class="legend-text">Feature Store DB</text>
+  
+  <rect x="350" y="1030" width="20" height="15" class="box service" />
+  <text x="375" y="1043" class="legend-text">Model Registry Service</text>
+  
+  <rect x="525" y="1030" width="20" height="15" class="box feature-service" />
+  <text x="550" y="1043" class="legend-text">Feature Store Service</text>
+  
+  <rect x="700" y="1030" width="20" height="15" class="box ui" />
+  <text x="725" y="1043" class="legend-text">User Interface</text>
+  
+  <rect x="825" y="1030" width="20" height="15" class="box external" />
+  <text x="850" y="1043" class="legend-text">External System</text>
+
+  <!-- Arrow Marker Definitions -->
+  <defs>
+    <marker id="arrow1" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+      <polygon points="0,0 10,5 0,10" class="arrow"/>
+    </marker>
+    <marker id="arrow2" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+      <polygon points="0,0 10,5 0,10" class="feature-arrow"/>
+    </marker>
+    <marker id="arrow3" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+      <polygon points="0,0 10,5 0,10" class="mixed-arrow"/>
+    </marker>
+  </defs>
+</svg>
