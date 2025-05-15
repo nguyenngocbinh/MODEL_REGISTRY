@@ -8,86 +8,204 @@ Hệ Thống Đăng Ký Mô Hình là một giải pháp cơ sở dữ liệu to
 
 ```
 model-registry/
-├── README.md                             # Tài liệu tổng quan về dự án
-├── database/                             # Thư mục chứa tất cả các script SQL
-│   ├── schema/                           # Định nghĩa cấu trúc cơ sở dữ liệu
-│   │   ├── 01_model_type.sql             # Tạo bảng MODEL_TYPE
-│   │   ├── 02_model_registry.sql         # Tạo bảng MODEL_REGISTRY
-│   │   ├── 03_model_parameters.sql       # Tạo bảng MODEL_PARAMETERS
-│   │   ├── 04_model_source_tables.sql    # Tạo bảng MODEL_SOURCE_TABLES
-│   │   ├── 05_model_column_details.sql   # Tạo bảng MODEL_COLUMN_DETAILS
-│   │   ├── 06_model_table_usage.sql      # Tạo bảng MODEL_TABLE_USAGE
-│   │   ├── 07_model_table_mapping.sql    # Tạo bảng MODEL_TABLE_MAPPING
-│   │   ├── 08_model_segment_mapping.sql  # Tạo bảng MODEL_SEGMENT_MAPPING
+├── README.md                               # Tài liệu tổng quan về dự án
+├── database/                               # Thư mục chứa tất cả các script SQL
+│   ├── schema/                             # Định nghĩa cấu trúc cơ sở dữ liệu
+│   │   ├── 01_model_type.sql               # Tạo bảng MODEL_TYPE
+│   │   ├── 02_model_registry.sql           # Tạo bảng MODEL_REGISTRY
+│   │   ├── 03_model_parameters.sql         # Tạo bảng MODEL_PARAMETERS
+│   │   ├── 04_model_source_tables.sql      # Tạo bảng MODEL_SOURCE_TABLES
+│   │   ├── 05_model_column_details.sql     # Tạo bảng MODEL_COLUMN_DETAILS
+│   │   ├── 06_model_table_usage.sql        # Tạo bảng MODEL_TABLE_USAGE
+│   │   ├── 07_model_table_mapping.sql      # Tạo bảng MODEL_TABLE_MAPPING
+│   │   ├── 08_model_segment_mapping.sql    # Tạo bảng MODEL_SEGMENT_MAPPING
 │   │   ├── 09_model_validation_results.sql # Tạo bảng MODEL_VALIDATION_RESULTS
 │   │   ├── 10_model_source_refresh_log.sql # Tạo bảng MODEL_SOURCE_REFRESH_LOG
-│   │   └── 11_model_data_quality_log.sql # Tạo bảng MODEL_DATA_QUALITY_LOG
+│   │   ├── 11_model_data_quality_log.sql   # Tạo bảng MODEL_DATA_QUALITY_LOG
+│   │   ├── 12_feature_registry.sql         # Tạo bảng FEATURE_REGISTRY
+│   │   ├── 13_feature_transformations.sql  # Tạo bảng FEATURE_TRANSFORMATIONS
+│   │   ├── 14_feature_source_tables.sql    # Tạo bảng FEATURE_SOURCE_TABLES
+│   │   ├── 15_feature_values.sql           # Tạo bảng FEATURE_VALUES
+│   │   ├── 16_feature_stats.sql            # Tạo bảng FEATURE_STATS 
+│   │   ├── 17_feature_dependencies.sql     # Tạo bảng FEATURE_DEPENDENCIES
+│   │   ├── 18_feature_model_mapping.sql    # Tạo bảng FEATURE_MODEL_MAPPING
+│   │   └── 19_feature_refresh_log.sql      # Tạo bảng FEATURE_REFRESH_LOG
 │   │
-│   ├── views/                            # View SQL
+│   ├── views/                              # View SQL
 │   │   ├── 01_vw_model_table_relationships.sql
 │   │   ├── 02_vw_model_type_info.sql
-│   │   └── 03_vw_model_performance.sql
+│   │   ├── 03_vw_model_performance.sql
+│   │   ├── 04_vw_data_quality_summary.sql
+│   │   ├── 05_vw_model_lineage.sql
+│   │   ├── 06_vw_feature_catalog.sql       # View danh mục features
+│   │   ├── 07_vw_feature_model_usage.sql   # View sử dụng features trong models
+│   │   ├── 08_vw_feature_dependencies.sql  # View phụ thuộc giữa các features
+│   │   └── 09_vw_feature_lineage.sql       # View lineage từ nguồn đến feature đến model
 │   │
-│   ├── procedures/                       # Stored Procedures
+│   ├── procedures/                         # Stored Procedures
 │   │   ├── 01_get_model_tables.sql
 │   │   ├── 02_get_table_models.sql
 │   │   ├── 03_validate_model_sources.sql
 │   │   ├── 04_log_source_table_refresh.sql
 │   │   ├── 05_get_appropriate_model.sql
-│   │   └── 06_get_model_performance_history.sql
+│   │   ├── 06_get_model_performance_history.sql
+│   │   ├── 07_register_new_model.sql
+│   │   ├── 08_check_model_dependencies.sql
+│   │   ├── 09_register_new_feature.sql     # Đăng ký feature mới vào hệ thống
+│   │   ├── 10_update_feature_stats.sql     # Cập nhật thống kê của feature
+│   │   ├── 11_link_feature_to_model.sql    # Liên kết feature với model
+│   │   ├── 12_get_model_features.sql       # Lấy danh sách features của model
+│   │   └── 13_refresh_feature_values.sql   # Cập nhật giá trị của features
 │   │
-│   ├── functions/                        # Scalar và Table-Valued Functions
+│   ├── functions/                          # Scalar và Table-Valued Functions
 │   │   ├── 01_fn_get_model_score.sql
-│   │   └── 02_fn_calculate_psi.sql
+│   │   ├── 02_fn_calculate_psi.sql
+│   │   ├── 03_fn_calculate_ks.sql
+│   │   ├── 04_fn_get_model_version_info.sql
+│   │   ├── 05_fn_calculate_feature_drift.sql  # Tính toán độ dịch chuyển của feature
+│   │   ├── 06_fn_get_feature_history.sql      # Lấy lịch sử giá trị của feature
+│   │   └── 07_fn_validate_feature.sql         # Kiểm tra tính hợp lệ của feature
 │   │
-│   ├── triggers/                         # Triggers
+│   ├── triggers/                           # Triggers
 │   │   ├── 01_trg_audit_model_registry.sql
-│   │   └── 02_trg_audit_model_parameters.sql
+│   │   ├── 02_trg_audit_model_parameters.sql
+│   │   ├── 03_trg_validate_model_sources.sql
+│   │   ├── 04_trg_update_model_status.sql
+│   │   ├── 05_trg_audit_feature_registry.sql  # Ghi audit log khi feature thay đổi
+│   │   ├── 06_trg_feature_stat_update.sql     # Tự động cập nhật thống kê feature
+│   │   └── 07_trg_update_model_feature_dependencies.sql  # Cập nhật phụ thuộc feature-model
 │   │
-│   ├── sample_data/                      # Script nhập dữ liệu mẫu
+│   ├── sample_data/                        # Script nhập dữ liệu mẫu
 │   │   ├── 01_model_type_data.sql
 │   │   ├── 02_model_registry_data.sql
 │   │   ├── 03_model_parameters_data.sql
 │   │   ├── 04_model_source_tables_data.sql
 │   │   ├── 05_model_table_usage_data.sql
-│   │   └── 06_model_validation_results_data.sql
+│   │   ├── 06_model_validation_results_data.sql
+│   │   ├── 07_model_segment_mapping_data.sql
+│   │   ├── 08_model_column_details_data.sql
+│   │   ├── 09_feature_registry_data.sql       # Dữ liệu mẫu cho feature registry
+│   │   ├── 10_feature_transformations_data.sql # Dữ liệu mẫu cho transformations
+│   │   ├── 11_feature_source_tables_data.sql  # Dữ liệu mẫu cho feature sources
+│   │   └── 12_feature_model_mapping_data.sql  # Dữ liệu mẫu cho feature-model mapping
 │   │
-│   └── migrations/                       # Script nâng cấp schema
+│   └── migrations/                         # Script nâng cấp schema
 │       ├── v1.0-to-v1.1/
 │       │   ├── 01_add_column_model_registry.sql
 │       │   └── 02_update_view_model_type_info.sql
-│       └── v1.1-to-v1.2/
-│           └── 01_add_model_validation_results.sql
+│       ├── v1.1-to-v1.2/
+│       │   ├── 01_add_model_validation_results.sql
+│       │   └── 02_add_performance_metrics.sql
+│       └── v1.2-to-v1.3/
+│           ├── 01_add_feature_store_tables.sql
+│           └── 02_update_model_registry_for_features.sql
 │
-├── docs/                                 # Tài liệu
-│   ├── diagrams/                         # Các sơ đồ
+├── docs/                                   # Tài liệu
+│   ├── diagrams/                           # Các sơ đồ
 │   │   ├── er_diagram.png
-│   │   └── architecture_diagram.png
+│   │   ├── architecture_diagram.png
+│   │   ├── data_flow_diagram.png
+│   │   ├── component_diagram.png
+│   │   └── feature_store_integration.png   # Sơ đồ tích hợp feature store
 │   │
-│   ├── user_guide.md                     # Hướng dẫn sử dụng
-│   ├── admin_guide.md                    # Hướng dẫn quản trị
-│   ├── implementation_guide.md           # Hướng dẫn triển khai
-│   └── api_documentation.md              # Tài liệu API
+│   ├── user_guide.md                       # Hướng dẫn sử dụng
+│   ├── admin_guide.md                      # Hướng dẫn quản trị
+│   ├── implementation_guide.md             # Hướng dẫn triển khai
+│   ├── api_documentation.md                # Tài liệu API
+│   ├── data_dictionary.md                  # Từ điển dữ liệu
+│   ├── troubleshooting.md                  # Hướng dẫn xử lý sự cố
+│   ├── best_practices.md                   # Các thực hành tốt nhất
+│   ├── feature_store_guide.md              # Hướng dẫn sử dụng feature store
+│   └── feature_management.md               # Quản lý features
 │
-├── tests/                                # Kiểm thử
-│   ├── unit_tests/                       # Kiểm thử đơn vị
+├── tests/                                  # Kiểm thử
+│   ├── unit_tests/                         # Kiểm thử đơn vị
 │   │   ├── test_model_registry.sql
-│   │   └── test_model_validation.sql
+│   │   ├── test_model_validation.sql
+│   │   ├── test_functions.sql
+│   │   ├── test_triggers.sql
+│   │   ├── test_feature_registry.sql       # Kiểm thử feature registry
+│   │   └── test_feature_transformations.sql # Kiểm thử feature transformations
 │   │
-│   └── integration_tests/                # Kiểm thử tích hợp
-│       ├── test_procedures.sql
-│       └── test_views.sql
+│   ├── integration_tests/                  # Kiểm thử tích hợp
+│   │   ├── test_procedures.sql
+│   │   ├── test_views.sql
+│   │   ├── test_end_to_end.sql
+│   │   └── test_model_feature_integration.sql # Kiểm thử tích hợp model-feature
+│   │
+│   └── performance_tests/                  # Kiểm thử hiệu năng
+│       ├── test_query_performance.sql
+│       ├── test_load_performance.sql
+│       └── test_feature_store_performance.sql # Kiểm thử hiệu năng feature store
 │
-├── reports/                              # Mẫu báo cáo
+├── api/                                    # API cho Model Registry
+│   ├── endpoints/                          # Các endpoint API
+│   │   ├── model_registry_api.sql
+│   │   ├── model_validation_api.sql
+│   │   ├── model_metrics_api.sql
+│   │   ├── feature_registry_api.sql        # API cho feature registry
+│   │   └── feature_transformations_api.sql # API cho feature transformations
+│   │
+│   ├── authentication/                     # Xác thực API
+│   │   ├── api_roles.sql
+│   │   └── api_permissions.sql
+│   │
+│   └── examples/                           # Ví dụ sử dụng API
+│       ├── register_model_example.sql
+│       ├── get_model_metrics_example.sql
+│       ├── register_feature_example.sql    # Ví dụ đăng ký feature
+│       └── get_model_features_example.sql  # Ví dụ lấy features của model
+│
+├── reports/                                # Mẫu báo cáo
 │   ├── model_inventory_report.sql
 │   ├── model_performance_report.sql
-│   └── data_quality_report.sql
+│   ├── data_quality_report.sql
+│   ├── model_compliance_report.sql
+│   ├── model_drift_report.sql
+│   ├── model_usage_report.sql
+│   ├── feature_inventory_report.sql        # Báo cáo danh mục features
+│   ├── feature_usage_report.sql            # Báo cáo sử dụng features
+│   ├── feature_drift_report.sql            # Báo cáo dịch chuyển features
+│   ├── feature_reuse_analysis.sql          # Phân tích tái sử dụng features
+│   ├── feature_data_quality_report.sql     # Báo cáo chất lượng dữ liệu features
+│   └── model_feature_impact_report.sql     # Báo cáo tác động feature đến model
 │
-└── scripts/                              # Scripts hỗ trợ
-    ├── deploy.bat                        # Script triển khai cho Windows
-    ├── deploy.sh                         # Script triển khai cho Linux/Unix
-    ├── install_all.sql                   # Script cài đặt tất cả
-    └── uninstall.sql                     # Script gỡ bỏ
+├── utilities/                              # Tiện ích
+│   ├── data_extraction/                    # Các script trích xuất dữ liệu
+│   │   ├── extract_model_metadata.sql
+│   │   ├── extract_model_performance.sql
+│   │   ├── extract_feature_metadata.sql    # Trích xuất metadata của features
+│   │   └── extract_feature_transformations.sql # Trích xuất transformations
+│   │
+│   ├── data_import/                        # Các script nhập dữ liệu
+│   │   ├── import_model_registry.sql
+│   │   ├── import_model_parameters.sql
+│   │   ├── import_feature_registry.sql     # Nhập dữ liệu vào feature registry
+│   │   └── import_feature_transformations.sql # Nhập dữ liệu transformations
+│   │
+│   ├── maintenance/                        # Script bảo trì
+│   │   ├── cleanup_old_logs.sql
+│   │   ├── optimize_tables.sql
+│   │   └── validate_data_integrity.sql
+│   │
+│   └── feature_store/                      # Tiện ích feature store
+│       ├── calculate_offline_features.sql  # Tính toán features cho offline store
+│       ├── refresh_online_store.sql        # Cập nhật online store
+│       └── validate_feature_quality.sql    # Kiểm tra chất lượng features
+│
+└── scripts/                                # Scripts hỗ trợ
+    ├── deploy.bat                          # Script triển khai cho Windows
+    ├── deploy.sh                           # Script triển khai cho Linux/Unix
+    ├── install_all.sql                     # Script cài đặt tất cả
+    ├── uninstall.sql                       # Script gỡ bỏ
+    ├── backup_registry.sql                 # Script sao lưu registry
+    ├── restore_registry.sql                # Script khôi phục registry
+    ├── generate_documentation.sql          # Script tạo tài liệu tự động
+    ├── health_check.sql                    # Script kiểm tra tình trạng hệ thống
+    ├── setup_feature_store.sql             # Script cài đặt feature store
+    ├── backup_feature_store.sql            # Script sao lưu feature store
+    └── restore_feature_store.sql           # Script khôi phục feature store
+    
 ```
 
 ## Tính Năng Chính
