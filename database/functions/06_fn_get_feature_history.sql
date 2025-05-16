@@ -101,10 +101,10 @@ RETURN (
                 ELSE fv.EFF_DATE
             END AS TIME_PERIOD,
             -- Tổng hợp dữ liệu theo loại VALUE_TYPE
-            AVG(CASE WHEN fv.MIN_VALUE IS NOT NULL THEN fv.MIN_VALUE END) AS AVG_MIN_VALUE,
-            AVG(CASE WHEN fv.MAX_VALUE IS NOT NULL THEN fv.MAX_VALUE END) AS AVG_MAX_VALUE,
-            AVG(CASE WHEN fv.MEAN_FOR_RANGE IS NOT NULL THEN fv.MEAN_FOR_RANGE END) AS AVG_MEAN_VALUE,
-            AVG(CASE WHEN fv.MEDIAN_FOR_RANGE IS NOT NULL THEN fv.MEDIAN_FOR_RANGE END) AS AVG_MEDIAN_VALUE,
+            AVG(CASE WHEN fv.MIN_VALUE IS NOT NULL THEN CAST(fv.MIN_VALUE AS FLOAT) END) AS AVG_MIN_VALUE,
+            AVG(CASE WHEN fv.MAX_VALUE IS NOT NULL THEN CAST(fv.MAX_VALUE AS FLOAT) END) AS AVG_MAX_VALUE,
+            AVG(CASE WHEN fv.MEAN_FOR_RANGE IS NOT NULL THEN CAST(fv.MEAN_FOR_RANGE AS FLOAT) END) AS AVG_MEAN_VALUE,
+            AVG(CASE WHEN fv.MEDIAN_FOR_RANGE IS NOT NULL THEN CAST(fv.MEDIAN_FOR_RANGE AS FLOAT) END) AS AVG_MEDIAN_VALUE,
             SUM(fv.RECORD_COUNT) AS TOTAL_RECORDS,
             AVG(CASE WHEN fv.FREQUENCY IS NOT NULL THEN fv.FREQUENCY END) AS AVG_FREQUENCY,
             AVG(CASE WHEN fv.EVENT_RATE IS NOT NULL THEN fv.EVENT_RATE END) AS AVG_EVENT_RATE,
@@ -426,7 +426,6 @@ RETURN (
         DAYS_SINCE_LAST_DATA
     FROM FeatureHistorySummary
     WHERE HAS_DATA_FOR_PERIOD = 1 -- Chỉ lấy các thời kỳ có dữ liệu
-    ORDER BY TIME_PERIOD DESC
 );
 GO
 
@@ -437,48 +436,63 @@ EXEC sys.sp_addextendedproperty @name = N'MS_Description',
     @level1type = N'FUNCTION',  @level1name = N'FN_GET_FEATURE_HISTORY';
 GO
 
--- Tạo thêm một function để lấy lịch sử giá trị của đặc trưng theo tên
-IF OBJECT_ID('dbo.FN_GET_FEATURE_HISTORY_BY_NAME', 'TF') IS NOT NULL
+-- Kiểm tra nếu function đã tồn tại thì xóa
+IF OBJECT_ID('MODEL_REGISTRY.dbo.FN_GET_FEATURE_HISTORY_BY_NAME', 'IF') IS NOT NULL
     DROP FUNCTION dbo.FN_GET_FEATURE_HISTORY_BY_NAME;
 GO
 
+-- Tạo function FN_GET_FEATURE_HISTORY_BY_NAME
 CREATE FUNCTION dbo.FN_GET_FEATURE_HISTORY_BY_NAME (
-    @FEATURE_NAME NVARCHAR(100),         -- Tên của đặc trưng
-    @START_DATE DATE = NULL,             -- Ngày bắt đầu của khoảng thời gian
-    @END_DATE DATE = NULL,               -- Ngày kết thúc của khoảng thời gian
-    @GROUP_BY NVARCHAR(20) = 'MONTHLY',  -- Nhóm theo: 'DAILY', 'WEEKLY', 'MONTHLY', 'QUARTERLY', 'YEARLY'
-    @SEGMENT_ID INT = NULL               -- ID của phân khúc, NULL nếu lấy tổng thể
+    @FEATURE_NAME NVARCHAR(100),
+    @START_DATE DATE = NULL,
+    @END_DATE DATE = NULL
 )
 RETURNS TABLE
 AS
 RETURN (
-    -- Lấy FEATURE_ID từ tên đặc trưng
-    WITH FeatureInfo AS (
-        SELECT FEATURE_ID
-        FROM dbo.FEATURE_REGISTRY
-        WHERE FEATURE_NAME = @FEATURE_NAME
-        AND IS_ACTIVE = 1
-    )
-    -- Sử dụng function FN_GET_FEATURE_HISTORY với FEATURE_ID
-    SELECT *
-    FROM FeatureInfo fi
-    CROSS APPLY dbo.FN_GET_FEATURE_HISTORY(
-        fi.FEATURE_ID,
-        @START_DATE,
-        @END_DATE,
-        @GROUP_BY,
-        @SEGMENT_ID
-    )
+    -- Kết quả cuối cùng - Lấy lịch sử làm mới và thay đổi thống kê
+    SELECT 
+        fr.FEATURE_NAME,
+        fr.FEATURE_CODE,
+        fr.FEATURE_DESCRIPTION,
+        fr.DATA_TYPE,
+        fr.VALUE_TYPE,
+        frl.LOG_ID,
+        frl.REFRESH_TYPE,
+        frl.REFRESH_START_TIME,
+        frl.REFRESH_END_TIME,
+        frl.REFRESH_STATUS,
+        frl.AFFECTED_RECORDS,
+        frl.SOURCE_DATA_START_DATE,
+        frl.SOURCE_DATA_END_DATE,
+        frl.REFRESH_REASON,
+        frl.ENVIRONMENT,
+        CASE 
+            WHEN frl.REFRESH_END_TIME IS NOT NULL AND frl.REFRESH_START_TIME IS NOT NULL
+            THEN DATEDIFF(SECOND, frl.REFRESH_START_TIME, frl.REFRESH_END_TIME)
+            ELSE NULL
+        END AS DURATION_SECONDS,
+        frl.FEATURE_OLD_STATS,
+        frl.FEATURE_NEW_STATS,
+        frl.CREATED_BY AS REFRESH_CREATED_BY,
+        frl.CREATED_DATE AS REFRESH_CREATED_DATE
+    FROM dbo.FEATURE_REGISTRY fr
+    LEFT JOIN dbo.FEATURE_REFRESH_LOG frl ON fr.FEATURE_ID = frl.FEATURE_ID
+    WHERE fr.FEATURE_NAME = @FEATURE_NAME
+    AND fr.IS_ACTIVE = 1
+    AND (@START_DATE IS NULL OR frl.REFRESH_START_TIME >= @START_DATE)
+    AND (@END_DATE IS NULL OR frl.REFRESH_START_TIME <= @END_DATE)
 );
 GO
 
+-- Thêm comment cho function
 EXEC sys.sp_addextendedproperty @name = N'MS_Description', 
-    @value = N'Lấy lịch sử giá trị của đặc trưng theo tên', 
+    @value = N'Lấy lịch sử của đặc trưng theo tên', 
     @level0type = N'SCHEMA', @level0name = N'dbo', 
     @level1type = N'FUNCTION',  @level1name = N'FN_GET_FEATURE_HISTORY_BY_NAME';
 GO
 
-PRINT N'Function FN_GET_FEATURE_HISTORY và FN_GET_FEATURE_HISTORY_BY_NAME đã được tạo thành công';
+PRINT N'Function FN_GET_FEATURE_HISTORY_BY_NAME đã được tạo thành công';
 GO
 
 -- Ví dụ sử dụng
