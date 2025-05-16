@@ -19,6 +19,9 @@ GO
 CREATE TRIGGER dbo.TRG_UPDATE_MODEL_STATUS
 ON MODEL_REGISTRY.dbo.MODEL_VALIDATION_RESULTS
 AFTER INSERT, UPDATE
+/* 
+Mô tả: Trigger tự động cập nhật trạng thái mô hình dựa trên kết quả đánh giá
+*/
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -133,6 +136,9 @@ GO
 CREATE TRIGGER dbo.TRG_UPDATE_MODEL_STATUS_FROM_REFRESH
 ON MODEL_REGISTRY.dbo.MODEL_SOURCE_REFRESH_LOG
 AFTER INSERT, UPDATE
+/* 
+Mô tả: Trigger tự động cập nhật trạng thái mô hình dựa trên việc làm mới dữ liệu nguồn
+*/
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -153,26 +159,42 @@ BEGIN
     WHERE i.REFRESH_STATUS IN ('COMPLETED', 'FAILED')
       AND tm.IS_CRITICAL = 1; -- Chỉ quan tâm đến các bảng quan trọng
     
-    -- Cập nhật trạng thái mô hình dựa trên việc làm mới dữ liệu
+    -- Tạo bảng tạm để lưu trữ thông tin về trạng thái nguồn dữ liệu quan trọng
+    CREATE TABLE #SourceStatus (
+        MODEL_ID INT,
+        SOURCE_TABLE_ID INT,
+        IS_RECENTLY_REFRESHED BIT
+    );
+    
+    -- Lấy tất cả các nguồn dữ liệu quan trọng cho các mô hình bị ảnh hưởng
+    INSERT INTO #SourceStatus (MODEL_ID, SOURCE_TABLE_ID, IS_RECENTLY_REFRESHED)
+    SELECT 
+        tm.MODEL_ID,
+        tm.SOURCE_TABLE_ID,
+        CASE 
+            WHEN EXISTS (
+                SELECT 1 
+                FROM MODEL_REGISTRY.dbo.MODEL_SOURCE_REFRESH_LOG r
+                WHERE r.SOURCE_TABLE_ID = tm.SOURCE_TABLE_ID
+                  AND r.REFRESH_STATUS = 'COMPLETED'
+                  AND r.PROCESS_DATE > DATEADD(DAY, -7, GETDATE())
+            ) THEN 1
+            ELSE 0
+        END
+    FROM MODEL_REGISTRY.dbo.MODEL_TABLE_MAPPING tm
+    JOIN @AffectedModels am ON tm.MODEL_ID = am.MODEL_ID
+    WHERE tm.IS_CRITICAL = 1;
+    
+    -- Bây giờ tính toán trạng thái tổng thể cho mỗi mô hình
     WITH CriticalSourceStatus AS (
-        -- Kiểm tra trạng thái các nguồn dữ liệu quan trọng cho mỗi mô hình
         SELECT 
-            tm.MODEL_ID,
-            MIN(CASE 
-                -- Nếu có bất kỳ bảng quan trọng nào không có dữ liệu mới nhất
-                WHEN NOT EXISTS (
-                    SELECT 1 
-                    FROM MODEL_REGISTRY.dbo.MODEL_SOURCE_REFRESH_LOG r
-                    WHERE r.SOURCE_TABLE_ID = tm.SOURCE_TABLE_ID
-                      AND r.REFRESH_STATUS = 'COMPLETED'
-                      AND r.PROCESS_DATE > DATEADD(DAY, -7, GETDATE())
-                ) THEN 0
-                ELSE 1
-            END) AS AllSourcesReady
-        FROM MODEL_REGISTRY.dbo.MODEL_TABLE_MAPPING tm
-        JOIN @AffectedModels am ON tm.MODEL_ID = am.MODEL_ID
-        WHERE tm.IS_CRITICAL = 1
-        GROUP BY tm.MODEL_ID
+            MODEL_ID,
+            CASE 
+                WHEN MIN(IS_RECENTLY_REFRESHED) = 1 THEN 1 -- Tất cả các nguồn đều đã được làm mới gần đây
+                ELSE 0 -- Ít nhất một nguồn chưa được làm mới gần đây
+            END AS AllSourcesReady
+        FROM #SourceStatus
+        GROUP BY MODEL_ID
     )
     UPDATE MODEL_REGISTRY.dbo.MODEL_REGISTRY
     SET 
@@ -243,21 +265,16 @@ BEGIN
         
         -- Ở đây có thể thêm mã để gửi email, thông báo hoặc tạo báo cáo nếu cần
     END
+    
+    -- Dọn dẹp bảng tạm
+    DROP TABLE #SourceStatus;
 END;
 GO
 
--- Thêm comment cho các trigger
-EXEC sys.sp_addextendedproperty @name = N'MS_Description', 
-    @value = N'Trigger tự động cập nhật trạng thái mô hình dựa trên kết quả đánh giá', 
-    @level0type = N'SCHEMA', @level0name = N'dbo', 
-    @level1type = N'TRIGGER',  @level1name = N'TRG_UPDATE_MODEL_STATUS';
-GO
-
-EXEC sys.sp_addextendedproperty @name = N'MS_Description', 
-    @value = N'Trigger tự động cập nhật trạng thái mô hình dựa trên việc làm mới dữ liệu nguồn', 
-    @level0type = N'SCHEMA', @level0name = N'dbo', 
-    @level1type = N'TRIGGER',  @level1name = N'TRG_UPDATE_MODEL_STATUS_FROM_REFRESH';
-GO
+-- Bỏ qua việc sử dụng sp_addextendedproperty và thay vào đó in thông báo
+PRINT N'Các trigger đã được tạo thành công:';
+PRINT N'- TRG_UPDATE_MODEL_STATUS: Trigger tự động cập nhật trạng thái mô hình dựa trên kết quả đánh giá';
+PRINT N'- TRG_UPDATE_MODEL_STATUS_FROM_REFRESH: Trigger tự động cập nhật trạng thái mô hình dựa trên việc làm mới dữ liệu nguồn';
 
 -- Kiểm tra và thêm cột mới vào bảng MODEL_REGISTRY nếu cần
 IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('MODEL_REGISTRY.dbo.MODEL_REGISTRY') AND name = 'MODEL_STATUS')
