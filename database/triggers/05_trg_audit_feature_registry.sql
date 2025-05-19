@@ -3,7 +3,7 @@ Tên file: 05_trg_audit_feature_registry.sql
 Mô tả: Tạo trigger TRG_AUDIT_FEATURE_REGISTRY để ghi nhật ký thay đổi trong bảng FEATURE_REGISTRY
 Tác giả: Nguyễn Ngọc Bình
 Ngày tạo: 2025-05-16
-Phiên bản: 1.0
+Phiên bản: 1.1 - Sửa lỗi truy cập cột động
 */
 
 USE MODEL_REGISTRY
@@ -66,111 +66,232 @@ BEGIN
         SELECT FEATURE_ID FROM inserted
         UNION
         SELECT FEATURE_ID FROM deleted
+        WHERE FEATURE_ID IS NOT NULL
     ) f
     LEFT JOIN MODEL_REGISTRY.dbo.FEATURE_MODEL_MAPPING fmm ON f.FEATURE_ID = fmm.FEATURE_ID
-    WHERE fmm.IS_ACTIVE = 1
+    WHERE fmm.IS_ACTIVE = 1 OR fmm.IS_ACTIVE IS NULL
     GROUP BY f.FEATURE_ID;
     
     -- Ghi nhật ký cho các thao tác INSERT
     IF @action_type = 'INSERT'
     BEGIN
-        INSERT INTO MODEL_REGISTRY.dbo.AUDIT_FEATURE_REGISTRY (
-            FEATURE_ID, 
-            ACTION_TYPE, 
-            FIELD_NAME, 
-            OLD_VALUE, 
-            NEW_VALUE,
-            AFFECTED_MODELS
-        )
+        -- Lấy tất cả các cột cần theo dõi
+        DECLARE @InsertColumns TABLE (
+            column_id INT, 
+            column_name NVARCHAR(128),
+            system_type_id INT
+        );
+        
+        INSERT INTO @InsertColumns
         SELECT 
-            i.FEATURE_ID,
-            'INSERT',
-            c.name, -- Tên cột
-            NULL,   -- Không có giá trị cũ
-            CASE 
-                WHEN c.system_type_id = 61 /* datetime */ 
-                    THEN CONVERT(NVARCHAR, i.[c.name], 121)
-                ELSE CAST(i.[c.name] AS NVARCHAR(MAX)) 
-            END,
-            am.MODEL_LIST
-        FROM inserted i
-        LEFT JOIN @AffectedModels am ON i.FEATURE_ID = am.FEATURE_ID
-        CROSS JOIN sys.columns c
-        WHERE c.object_id = OBJECT_ID('MODEL_REGISTRY.dbo.FEATURE_REGISTRY')
-          AND c.name NOT IN ('CREATED_DATE', 'CREATED_BY', 'UPDATED_DATE', 'UPDATED_BY');
+            column_id, 
+            name AS column_name,
+            system_type_id
+        FROM sys.columns 
+        WHERE object_id = OBJECT_ID('MODEL_REGISTRY.dbo.FEATURE_REGISTRY')
+        AND name NOT IN ('CREATED_DATE', 'CREATED_BY', 'UPDATED_DATE', 'UPDATED_BY');
+        
+        -- Xử lý từng cột cho mỗi đặc trưng được thêm mới
+        DECLARE @insert_feature_id INT;
+        DECLARE @insert_column_name NVARCHAR(128);
+        DECLARE @insert_column_id INT;
+        DECLARE @insert_system_type_id INT;
+        DECLARE @insert_model_list NVARCHAR(MAX);
+        DECLARE @insert_sql NVARCHAR(MAX);
+        DECLARE @insert_params NVARCHAR(MAX);
+        DECLARE @insert_value NVARCHAR(MAX);
+        
+        -- Cursor cho các đặc trưng mới
+        DECLARE insert_feature_cursor CURSOR FOR
+        SELECT FEATURE_ID FROM inserted;
+        
+        OPEN insert_feature_cursor;
+        FETCH NEXT FROM insert_feature_cursor INTO @insert_feature_id;
+        
+        WHILE @@FETCH_STATUS = 0
+        BEGIN
+            -- Lấy danh sách mô hình bị ảnh hưởng bởi đặc trưng này
+            SELECT @insert_model_list = MODEL_LIST
+            FROM @AffectedModels
+            WHERE FEATURE_ID = @insert_feature_id;
+            
+            -- Cursor cho các cột cần theo dõi
+            DECLARE insert_column_cursor CURSOR FOR
+            SELECT column_id, column_name, system_type_id FROM @InsertColumns;
+            
+            OPEN insert_column_cursor;
+            FETCH NEXT FROM insert_column_cursor INTO @insert_column_id, @insert_column_name, @insert_system_type_id;
+            
+            WHILE @@FETCH_STATUS = 0
+            BEGIN
+                -- Lấy giá trị của cột
+                SET @insert_sql = N'SELECT @value = CASE 
+                                     WHEN ' + QUOTENAME(@insert_column_name) + ' IS NULL THEN NULL 
+                                     WHEN ' + CAST(@insert_system_type_id AS NVARCHAR) + ' = 61 THEN CONVERT(NVARCHAR(MAX), ' + QUOTENAME(@insert_column_name) + ', 121) 
+                                     ELSE CAST(' + QUOTENAME(@insert_column_name) + ' AS NVARCHAR(MAX)) 
+                                   END 
+                                   FROM inserted WHERE FEATURE_ID = @feature_id';
+                                   
+                SET @insert_params = N'@feature_id INT, @value NVARCHAR(MAX) OUTPUT';
+                SET @insert_value = NULL;
+                
+                EXEC sp_executesql @insert_sql, @insert_params, 
+                     @feature_id = @insert_feature_id, 
+                     @value = @insert_value OUTPUT;
+                
+                -- Ghi lại trong bảng audit
+                INSERT INTO MODEL_REGISTRY.dbo.AUDIT_FEATURE_REGISTRY (
+                    FEATURE_ID, 
+                    ACTION_TYPE, 
+                    FIELD_NAME, 
+                    OLD_VALUE, 
+                    NEW_VALUE,
+                    AFFECTED_MODELS
+                )
+                VALUES (
+                    @insert_feature_id,
+                    'INSERT',
+                    @insert_column_name,
+                    NULL, -- Không có giá trị cũ cho INSERT
+                    @insert_value,
+                    @insert_model_list
+                );
+                
+                FETCH NEXT FROM insert_column_cursor INTO @insert_column_id, @insert_column_name, @insert_system_type_id;
+            END
+            
+            CLOSE insert_column_cursor;
+            DEALLOCATE insert_column_cursor;
+            
+            FETCH NEXT FROM insert_feature_cursor INTO @insert_feature_id;
+        END
+        
+        CLOSE insert_feature_cursor;
+        DEALLOCATE insert_feature_cursor;
     END
     
     -- Ghi nhật ký cho các thao tác UPDATE
     ELSE IF @action_type = 'UPDATE'
     BEGIN
-        INSERT INTO MODEL_REGISTRY.dbo.AUDIT_FEATURE_REGISTRY (
-            FEATURE_ID, 
-            ACTION_TYPE, 
-            FIELD_NAME, 
-            OLD_VALUE, 
-            NEW_VALUE,
-            AFFECTED_MODELS
-        )
+        -- Lấy tất cả các cột cần theo dõi
+        DECLARE @UpdateColumns TABLE (
+            column_id INT, 
+            column_name NVARCHAR(128),
+            system_type_id INT
+        );
+        
+        INSERT INTO @UpdateColumns
         SELECT 
-            i.FEATURE_ID,
-            'UPDATE',
-            c.name, -- Tên cột
-            CASE 
-                WHEN c.system_type_id = 61 /* datetime */ 
-                    THEN CONVERT(NVARCHAR, d.[c.name], 121)
-                ELSE CAST(d.[c.name] AS NVARCHAR(MAX)) 
-            END,
-            CASE 
-                WHEN c.system_type_id = 61 /* datetime */ 
-                    THEN CONVERT(NVARCHAR, i.[c.name], 121)
-                ELSE CAST(i.[c.name] AS NVARCHAR(MAX)) 
-            END,
-            am.MODEL_LIST
-        FROM deleted d
-        JOIN inserted i ON d.FEATURE_ID = i.FEATURE_ID
-        LEFT JOIN @AffectedModels am ON i.FEATURE_ID = am.FEATURE_ID
-        CROSS JOIN sys.columns c
-        WHERE c.object_id = OBJECT_ID('MODEL_REGISTRY.dbo.FEATURE_REGISTRY')
-          AND c.name NOT IN ('CREATED_DATE', 'CREATED_BY', 'UPDATED_DATE', 'UPDATED_BY')
-          AND (
-                 (d.[c.name] IS NULL AND i.[c.name] IS NOT NULL)
-              OR (d.[c.name] IS NOT NULL AND i.[c.name] IS NULL)
-              OR d.[c.name] <> i.[c.name]
-          );
-    END
-    
-    -- Ghi nhật ký cho các thao tác DELETE
-    ELSE
-    BEGIN
-        INSERT INTO MODEL_REGISTRY.dbo.AUDIT_FEATURE_REGISTRY (
-            FEATURE_ID, 
-            ACTION_TYPE, 
-            FIELD_NAME, 
-            OLD_VALUE, 
-            NEW_VALUE,
-            AFFECTED_MODELS
-        )
-        SELECT 
-            d.FEATURE_ID,
-            'DELETE',
-            c.name, -- Tên cột
-            CASE 
-                WHEN c.system_type_id = 61 /* datetime */ 
-                    THEN CONVERT(NVARCHAR, d.[c.name], 121)
-                ELSE CAST(d.[c.name] AS NVARCHAR(MAX)) 
-            END,
-            NULL,    -- Không có giá trị mới
-            am.MODEL_LIST
-        FROM deleted d
-        LEFT JOIN @AffectedModels am ON d.FEATURE_ID = am.FEATURE_ID
-        CROSS JOIN sys.columns c
-        WHERE c.object_id = OBJECT_ID('MODEL_REGISTRY.dbo.FEATURE_REGISTRY')
-          AND c.name NOT IN ('CREATED_DATE', 'CREATED_BY', 'UPDATED_DATE', 'UPDATED_BY');
-    END
-    
-    -- Cập nhật trường UPDATED_BY và UPDATED_DATE trong bảng FEATURE_REGISTRY cho các thao tác UPDATE
-    IF @action_type = 'UPDATE'
-    BEGIN
+            column_id, 
+            name AS column_name,
+            system_type_id
+        FROM sys.columns 
+        WHERE object_id = OBJECT_ID('MODEL_REGISTRY.dbo.FEATURE_REGISTRY')
+        AND name NOT IN ('CREATED_DATE', 'CREATED_BY', 'UPDATED_DATE', 'UPDATED_BY');
+        
+        -- Xử lý từng cột cho mỗi đặc trưng được cập nhật
+        DECLARE @update_feature_id INT;
+        DECLARE @update_column_name NVARCHAR(128);
+        DECLARE @update_column_id INT;
+        DECLARE @update_system_type_id INT;
+        DECLARE @update_model_list NVARCHAR(MAX);
+        DECLARE @update_sql_old NVARCHAR(MAX);
+        DECLARE @update_sql_new NVARCHAR(MAX);
+        DECLARE @update_params NVARCHAR(MAX);
+        DECLARE @update_old_value NVARCHAR(MAX);
+        DECLARE @update_new_value NVARCHAR(MAX);
+        
+        -- Cursor cho các đặc trưng được cập nhật
+        DECLARE update_feature_cursor CURSOR FOR
+        SELECT i.FEATURE_ID 
+        FROM inserted i
+        JOIN deleted d ON i.FEATURE_ID = d.FEATURE_ID;
+        
+        OPEN update_feature_cursor;
+        FETCH NEXT FROM update_feature_cursor INTO @update_feature_id;
+        
+        WHILE @@FETCH_STATUS = 0
+        BEGIN
+            -- Lấy danh sách mô hình bị ảnh hưởng bởi đặc trưng này
+            SELECT @update_model_list = MODEL_LIST
+            FROM @AffectedModels
+            WHERE FEATURE_ID = @update_feature_id;
+            
+            -- Cursor cho các cột cần theo dõi
+            DECLARE update_column_cursor CURSOR FOR
+            SELECT column_id, column_name, system_type_id FROM @UpdateColumns;
+            
+            OPEN update_column_cursor;
+            FETCH NEXT FROM update_column_cursor INTO @update_column_id, @update_column_name, @update_system_type_id;
+            
+            WHILE @@FETCH_STATUS = 0
+            BEGIN
+                -- Lấy giá trị cũ
+                SET @update_sql_old = N'SELECT @value = CASE 
+                                     WHEN ' + QUOTENAME(@update_column_name) + ' IS NULL THEN NULL 
+                                     WHEN ' + CAST(@update_system_type_id AS NVARCHAR) + ' = 61 THEN CONVERT(NVARCHAR(MAX), ' + QUOTENAME(@update_column_name) + ', 121) 
+                                     ELSE CAST(' + QUOTENAME(@update_column_name) + ' AS NVARCHAR(MAX)) 
+                                   END 
+                                   FROM deleted WHERE FEATURE_ID = @feature_id';
+                
+                SET @update_params = N'@feature_id INT, @value NVARCHAR(MAX) OUTPUT';
+                SET @update_old_value = NULL;
+                
+                EXEC sp_executesql @update_sql_old, @update_params, 
+                     @feature_id = @update_feature_id, 
+                     @value = @update_old_value OUTPUT;
+                
+                -- Lấy giá trị mới
+                SET @update_sql_new = N'SELECT @value = CASE 
+                                     WHEN ' + QUOTENAME(@update_column_name) + ' IS NULL THEN NULL 
+                                     WHEN ' + CAST(@update_system_type_id AS NVARCHAR) + ' = 61 THEN CONVERT(NVARCHAR(MAX), ' + QUOTENAME(@update_column_name) + ', 121) 
+                                     ELSE CAST(' + QUOTENAME(@update_column_name) + ' AS NVARCHAR(MAX)) 
+                                   END 
+                                   FROM inserted WHERE FEATURE_ID = @feature_id';
+                
+                SET @update_new_value = NULL;
+                
+                EXEC sp_executesql @update_sql_new, @update_params, 
+                     @feature_id = @update_feature_id, 
+                     @value = @update_new_value OUTPUT;
+                
+                -- Chỉ ghi nhật ký nếu giá trị thực sự thay đổi
+                IF (@update_old_value IS NULL AND @update_new_value IS NOT NULL) OR
+                   (@update_old_value IS NOT NULL AND @update_new_value IS NULL) OR
+                   (@update_old_value <> @update_new_value)
+                BEGIN
+                    -- Ghi lại trong bảng audit
+                    INSERT INTO MODEL_REGISTRY.dbo.AUDIT_FEATURE_REGISTRY (
+                        FEATURE_ID, 
+                        ACTION_TYPE, 
+                        FIELD_NAME, 
+                        OLD_VALUE, 
+                        NEW_VALUE,
+                        AFFECTED_MODELS
+                    )
+                    VALUES (
+                        @update_feature_id,
+                        'UPDATE',
+                        @update_column_name,
+                        @update_old_value,
+                        @update_new_value,
+                        @update_model_list
+                    );
+                END
+                
+                FETCH NEXT FROM update_column_cursor INTO @update_column_id, @update_column_name, @update_system_type_id;
+            END
+            
+            CLOSE update_column_cursor;
+            DEALLOCATE update_column_cursor;
+            
+            FETCH NEXT FROM update_feature_cursor INTO @update_feature_id;
+        END
+        
+        CLOSE update_feature_cursor;
+        DEALLOCATE update_feature_cursor;
+        
+        -- Cập nhật trường UPDATED_BY và UPDATED_DATE
         UPDATE MODEL_REGISTRY.dbo.FEATURE_REGISTRY
         SET 
             UPDATED_BY = SUSER_SNAME(),
@@ -179,7 +300,105 @@ BEGIN
         JOIN inserted i ON fr.FEATURE_ID = i.FEATURE_ID;
     END
     
-    -- Ghi thông báo về các mô hình bị ảnh hưởng 
+    -- Ghi nhật ký cho các thao tác DELETE
+    ELSE
+    BEGIN
+        -- Lấy tất cả các cột cần theo dõi
+        DECLARE @DeleteColumns TABLE (
+            column_id INT, 
+            column_name NVARCHAR(128),
+            system_type_id INT
+        );
+        
+        INSERT INTO @DeleteColumns
+        SELECT 
+            column_id, 
+            name AS column_name,
+            system_type_id
+        FROM sys.columns 
+        WHERE object_id = OBJECT_ID('MODEL_REGISTRY.dbo.FEATURE_REGISTRY')
+        AND name NOT IN ('CREATED_DATE', 'CREATED_BY', 'UPDATED_DATE', 'UPDATED_BY');
+        
+        -- Xử lý từng cột cho mỗi đặc trưng bị xóa
+        DECLARE @delete_feature_id INT;
+        DECLARE @delete_column_name NVARCHAR(128);
+        DECLARE @delete_column_id INT;
+        DECLARE @delete_system_type_id INT;
+        DECLARE @delete_model_list NVARCHAR(MAX);
+        DECLARE @delete_sql NVARCHAR(MAX);
+        DECLARE @delete_params NVARCHAR(MAX);
+        DECLARE @delete_value NVARCHAR(MAX);
+        
+        -- Cursor cho các đặc trưng bị xóa
+        DECLARE delete_feature_cursor CURSOR FOR
+        SELECT FEATURE_ID FROM deleted;
+        
+        OPEN delete_feature_cursor;
+        FETCH NEXT FROM delete_feature_cursor INTO @delete_feature_id;
+        
+        WHILE @@FETCH_STATUS = 0
+        BEGIN
+            -- Lấy danh sách mô hình bị ảnh hưởng bởi đặc trưng này
+            SELECT @delete_model_list = MODEL_LIST
+            FROM @AffectedModels
+            WHERE FEATURE_ID = @delete_feature_id;
+            
+            -- Cursor cho các cột cần theo dõi
+            DECLARE delete_column_cursor CURSOR FOR
+            SELECT column_id, column_name, system_type_id FROM @DeleteColumns;
+            
+            OPEN delete_column_cursor;
+            FETCH NEXT FROM delete_column_cursor INTO @delete_column_id, @delete_column_name, @delete_system_type_id;
+            
+            WHILE @@FETCH_STATUS = 0
+            BEGIN
+                -- Lấy giá trị của cột
+                SET @delete_sql = N'SELECT @value = CASE 
+                                     WHEN ' + QUOTENAME(@delete_column_name) + ' IS NULL THEN NULL 
+                                     WHEN ' + CAST(@delete_system_type_id AS NVARCHAR) + ' = 61 THEN CONVERT(NVARCHAR(MAX), ' + QUOTENAME(@delete_column_name) + ', 121) 
+                                     ELSE CAST(' + QUOTENAME(@delete_column_name) + ' AS NVARCHAR(MAX)) 
+                                   END 
+                                   FROM deleted WHERE FEATURE_ID = @feature_id';
+                                   
+                SET @delete_params = N'@feature_id INT, @value NVARCHAR(MAX) OUTPUT';
+                SET @delete_value = NULL;
+                
+                EXEC sp_executesql @delete_sql, @delete_params, 
+                     @feature_id = @delete_feature_id, 
+                     @value = @delete_value OUTPUT;
+                
+                -- Ghi lại trong bảng audit
+                INSERT INTO MODEL_REGISTRY.dbo.AUDIT_FEATURE_REGISTRY (
+                    FEATURE_ID, 
+                    ACTION_TYPE, 
+                    FIELD_NAME, 
+                    OLD_VALUE, 
+                    NEW_VALUE,
+                    AFFECTED_MODELS
+                )
+                VALUES (
+                    @delete_feature_id,
+                    'DELETE',
+                    @delete_column_name,
+                    @delete_value,
+                    NULL, -- Không có giá trị mới cho DELETE
+                    @delete_model_list
+                );
+                
+                FETCH NEXT FROM delete_column_cursor INTO @delete_column_id, @delete_column_name, @delete_system_type_id;
+            END
+            
+            CLOSE delete_column_cursor;
+            DEALLOCATE delete_column_cursor;
+            
+            FETCH NEXT FROM delete_feature_cursor INTO @delete_feature_id;
+        END
+        
+        CLOSE delete_feature_cursor;
+        DEALLOCATE delete_feature_cursor;
+    END
+    
+    -- Thông báo về các mô hình bị ảnh hưởng 
     IF EXISTS (SELECT 1 FROM @AffectedModels WHERE MODEL_LIST IS NOT NULL)
     BEGIN
         DECLARE @AffectedFeatureList NVARCHAR(MAX) = '';
@@ -195,30 +414,41 @@ BEGIN
         -- Nếu là thao tác UPDATE hoặc DELETE, có thể cần cập nhật trạng thái các mô hình bị ảnh hưởng
         IF @action_type IN ('UPDATE', 'DELETE')
         BEGIN
+            -- Lấy ID các mô hình từ chuỗi MODEL_LIST
+            DECLARE @models_to_update TABLE (MODEL_ID INT);
+            
+            INSERT INTO @models_to_update
+            SELECT DISTINCT TRY_CAST(value AS INT) AS MODEL_ID
+            FROM @AffectedModels
+            CROSS APPLY STRING_SPLIT(MODEL_LIST, ',')
+            WHERE MODEL_LIST IS NOT NULL AND TRIM(value) <> '';
+            
             -- Cập nhật trạng thái cho các mô hình bị ảnh hưởng
             UPDATE MODEL_REGISTRY.dbo.MODEL_REGISTRY
             SET 
                 MODEL_STATUS = 'NEEDS_REVIEW',
                 UPDATED_BY = SUSER_SNAME(),
                 UPDATED_DATE = GETDATE()
-            WHERE MODEL_ID IN (
-                SELECT CAST(value AS INT)
-                FROM @AffectedModels
-                CROSS APPLY STRING_SPLIT(MODEL_LIST, ',')
-            );
+            WHERE MODEL_ID IN (SELECT MODEL_ID FROM @models_to_update)
+            AND IS_ACTIVE = 1
+            AND MODEL_STATUS = 'ACTIVE';
             
-            PRINT N'CẢNH BÁO: Các mô hình bị ảnh hưởng đã được đánh dấu là "NEEDS_REVIEW"';
+            IF @@ROWCOUNT > 0
+                PRINT N'CẢNH BÁO: Các mô hình bị ảnh hưởng đã được đánh dấu là "NEEDS_REVIEW"';
         END
     END
 END;
 GO
 
+/*
 -- Thêm comment cho trigger
 EXEC sys.sp_addextendedproperty @name = N'MS_Description', 
     @value = N'Trigger ghi nhật ký thay đổi trong bảng FEATURE_REGISTRY và theo dõi các mô hình bị ảnh hưởng', 
     @level0type = N'SCHEMA', @level0name = N'dbo', 
     @level1type = N'TRIGGER',  @level1name = N'TRG_AUDIT_FEATURE_REGISTRY';
 GO
+*/
 
+-- Không hỗ trợ mô tả cho trigger 
 PRINT N'Trigger TRG_AUDIT_FEATURE_REGISTRY đã được tạo thành công';
 GO

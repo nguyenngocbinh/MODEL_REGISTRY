@@ -4,7 +4,7 @@ Mô tả: Tạo trigger TRG_FEATURE_STAT_UPDATE để tự động cập nhật 
       khi có thay đổi trong dữ liệu làm mới hoặc giá trị đặc trưng
 Tác giả: Nguyễn Ngọc Bình
 Ngày tạo: 2025-05-16
-Phiên bản: 1.0
+Phiên bản: 1.1 - Sửa lỗi column không tồn tại
 */
 
 USE MODEL_REGISTRY
@@ -13,6 +13,22 @@ GO
 -- Kiểm tra nếu trigger đã tồn tại thì xóa
 IF OBJECT_ID('dbo.TRG_FEATURE_STAT_UPDATE', 'TR') IS NOT NULL
     DROP TRIGGER dbo.TRG_FEATURE_STAT_UPDATE;
+GO
+
+-- Kiểm tra xem column FEATURE_IMPORTANCE có tồn tại trong bảng FEATURE_REGISTRY hay không
+-- Nếu không tồn tại, thêm cột này vào
+IF NOT EXISTS (
+    SELECT 1 
+    FROM sys.columns 
+    WHERE object_id = OBJECT_ID('MODEL_REGISTRY.dbo.FEATURE_REGISTRY') 
+    AND name = 'FEATURE_IMPORTANCE'
+)
+BEGIN
+    ALTER TABLE MODEL_REGISTRY.dbo.FEATURE_REGISTRY 
+    ADD FEATURE_IMPORTANCE FLOAT NULL;
+    
+    PRINT N'Đã thêm cột FEATURE_IMPORTANCE vào bảng FEATURE_REGISTRY';
+END
 GO
 
 -- Tạo trigger TRG_FEATURE_STAT_UPDATE cho bảng FEATURE_REFRESH_LOG
@@ -138,31 +154,40 @@ BEGIN
         );
     
     -- Cập nhật thông tin FEATURE_IMPORTANCE trong bảng FEATURE_REGISTRY
-    UPDATE fr
-    SET 
-        FEATURE_IMPORTANCE = CASE 
-            WHEN fs.INFORMATION_VALUE IS NOT NULL AND fs.INFORMATION_VALUE > 0 THEN
-                CASE
-                    -- Information Value (IV) thang đánh giá:
-                    -- < 0.02: Không có giá trị dự báo
-                    -- 0.02 to 0.1: Giá trị dự báo yếu
-                    -- 0.1 to 0.3: Giá trị dự báo trung bình
-                    -- > 0.3: Giá trị dự báo mạnh
-                    WHEN fs.INFORMATION_VALUE > 0.3 THEN 0.9
-                    WHEN fs.INFORMATION_VALUE > 0.1 THEN 0.7
-                    WHEN fs.INFORMATION_VALUE > 0.02 THEN 0.4
-                    ELSE 0.1
-                END
-            WHEN fs.TARGET_CORRELATION IS NOT NULL AND ABS(fs.TARGET_CORRELATION) > 0 THEN
-                ABS(fs.TARGET_CORRELATION) -- Sử dụng tương quan (giá trị tuyệt đối)
-            ELSE fr.FEATURE_IMPORTANCE -- Giữ nguyên giá trị hiện tại nếu không có thông tin mới
-        END,
-        UPDATED_BY = SUSER_SNAME(),
-        UPDATED_DATE = GETDATE()
-    FROM MODEL_REGISTRY.dbo.FEATURE_REGISTRY fr
-    JOIN MODEL_REGISTRY.dbo.FEATURE_STATS fs ON fr.FEATURE_ID = fs.FEATURE_ID
-    WHERE fr.FEATURE_ID IN (SELECT FEATURE_ID FROM @FeaturesToUpdate)
-      AND (fs.INFORMATION_VALUE IS NOT NULL OR fs.TARGET_CORRELATION IS NOT NULL);
+    -- Chỉ chạy đoạn này nếu cột FEATURE_IMPORTANCE tồn tại
+    IF EXISTS (
+        SELECT 1 
+        FROM sys.columns 
+        WHERE object_id = OBJECT_ID('MODEL_REGISTRY.dbo.FEATURE_REGISTRY') 
+        AND name = 'FEATURE_IMPORTANCE'
+    )
+    BEGIN
+        UPDATE fr
+        SET 
+            FEATURE_IMPORTANCE = CASE 
+                WHEN fs.INFORMATION_VALUE IS NOT NULL AND fs.INFORMATION_VALUE > 0 THEN
+                    CASE
+                        -- Information Value (IV) thang đánh giá:
+                        -- < 0.02: Không có giá trị dự báo
+                        -- 0.02 to 0.1: Giá trị dự báo yếu
+                        -- 0.1 to 0.3: Giá trị dự báo trung bình
+                        -- > 0.3: Giá trị dự báo mạnh
+                        WHEN fs.INFORMATION_VALUE > 0.3 THEN 0.9
+                        WHEN fs.INFORMATION_VALUE > 0.1 THEN 0.7
+                        WHEN fs.INFORMATION_VALUE > 0.02 THEN 0.4
+                        ELSE 0.1
+                    END
+                WHEN fs.TARGET_CORRELATION IS NOT NULL AND ABS(fs.TARGET_CORRELATION) > 0 THEN
+                    ABS(fs.TARGET_CORRELATION) -- Sử dụng tương quan (giá trị tuyệt đối)
+                ELSE fr.FEATURE_IMPORTANCE -- Giữ nguyên giá trị hiện tại nếu không có thông tin mới
+            END,
+            UPDATED_BY = SUSER_SNAME(),
+            UPDATED_DATE = GETDATE()
+        FROM MODEL_REGISTRY.dbo.FEATURE_REGISTRY fr
+        JOIN MODEL_REGISTRY.dbo.FEATURE_STATS fs ON fr.FEATURE_ID = fs.FEATURE_ID
+        WHERE fr.FEATURE_ID IN (SELECT FEATURE_ID FROM @FeaturesToUpdate)
+          AND (fs.INFORMATION_VALUE IS NOT NULL OR fs.TARGET_CORRELATION IS NOT NULL);
+    END
     
     -- Cập nhật bảng FEATURE_VALUES dựa trên thống kê mới nếu có
     -- Đây là một quy trình phức tạp và phụ thuộc vào cấu trúc của FEATURE_NEW_STATS
@@ -379,30 +404,62 @@ BEGIN
         
         -- Cập nhật trạng thái các mô hình bị ảnh hưởng bởi đặc trưng không ổn định
         -- Chỉ cập nhật nếu đặc trưng là quan trọng đối với mô hình (FEATURE_IMPORTANCE > 0.5)
-        UPDATE mr
-        SET 
-            MODEL_STATUS = 'NEEDS_REVIEW',
-            UPDATED_BY = SUSER_SNAME(),
-            UPDATED_DATE = GETDATE()
-        FROM MODEL_REGISTRY.dbo.MODEL_REGISTRY mr
-        JOIN MODEL_REGISTRY.dbo.FEATURE_MODEL_MAPPING fmm ON mr.MODEL_ID = fmm.MODEL_ID
-        JOIN MODEL_REGISTRY.dbo.FEATURE_STATS fs ON fmm.FEATURE_ID = fs.FEATURE_ID
-        JOIN @FeaturesToUpdate f ON fs.FEATURE_ID = f.FEATURE_ID
-        WHERE fs.STABILITY_INDEX > 0.25 -- Đặc trưng không ổn định
-          AND fmm.FEATURE_IMPORTANCE > 0.5 -- Đặc trưng quan trọng đối với mô hình
-          AND fmm.IS_ACTIVE = 1
-          AND mr.IS_ACTIVE = 1
-          AND mr.MODEL_STATUS = 'ACTIVE'; -- Chỉ cập nhật nếu mô hình đang hoạt động
+        -- Chỉ chạy nếu có cột FEATURE_IMPORTANCE
+        IF EXISTS (
+            SELECT 1 
+            FROM sys.columns 
+            WHERE object_id = OBJECT_ID('MODEL_REGISTRY.dbo.FEATURE_MODEL_MAPPING') 
+            AND name = 'FEATURE_IMPORTANCE'
+        )
+        BEGIN
+            UPDATE mr
+            SET 
+                MODEL_STATUS = 'NEEDS_REVIEW',
+                UPDATED_BY = SUSER_SNAME(),
+                UPDATED_DATE = GETDATE()
+            FROM MODEL_REGISTRY.dbo.MODEL_REGISTRY mr
+            JOIN MODEL_REGISTRY.dbo.FEATURE_MODEL_MAPPING fmm ON mr.MODEL_ID = fmm.MODEL_ID
+            JOIN MODEL_REGISTRY.dbo.FEATURE_STATS fs ON fmm.FEATURE_ID = fs.FEATURE_ID
+            JOIN @FeaturesToUpdate f ON fs.FEATURE_ID = f.FEATURE_ID
+            WHERE fs.STABILITY_INDEX > 0.25 -- Đặc trưng không ổn định
+              AND fmm.FEATURE_IMPORTANCE > 0.5 -- Đặc trưng quan trọng đối với mô hình
+              AND fmm.IS_ACTIVE = 1
+              AND mr.IS_ACTIVE = 1
+              AND mr.MODEL_STATUS = 'ACTIVE'; -- Chỉ cập nhật nếu mô hình đang hoạt động
+        END
     END
 END;
 GO
 
 -- Thêm comment cho trigger
-EXEC sys.sp_addextendedproperty @name = N'MS_Description', 
-    @value = N'Trigger tự động cập nhật thống kê của đặc trưng khi có thay đổi trong dữ liệu làm mới', 
-    @level0type = N'SCHEMA', @level0name = N'dbo', 
-    @level1type = N'TRIGGER',  @level1name = N'TRG_FEATURE_STAT_UPDATE';
+-- Kiểm tra nếu đối tượng tồn tại trước khi thêm extended property
+/*
+IF EXISTS (SELECT * FROM sys.triggers WHERE name = 'TRG_FEATURE_STAT_UPDATE')
+BEGIN
+    -- Kiểm tra nếu extended property đã tồn tại
+    IF NOT EXISTS (
+        SELECT * 
+        FROM sys.extended_properties 
+        WHERE major_id = OBJECT_ID('dbo.TRG_FEATURE_STAT_UPDATE')
+          AND name = 'MS_Description'
+    )
+    BEGIN
+        EXEC sys.sp_addextendedproperty 
+            @name = N'MS_Description', 
+            @value = N'Trigger tự động cập nhật thống kê của đặc trưng khi có thay đổi trong dữ liệu làm mới', 
+            @level0type = N'SCHEMA', @level0name = N'dbo', 
+            @level1type = N'TRIGGER', @level1name = N'TRG_FEATURE_STAT_UPDATE';
+    END
+    ELSE
+    BEGIN
+        EXEC sys.sp_updateextendedproperty 
+            @name = N'MS_Description', 
+            @value = N'Trigger tự động cập nhật thống kê của đặc trưng khi có thay đổi trong dữ liệu làm mới', 
+            @level0type = N'SCHEMA', @level0name = N'dbo', 
+            @level1type = N'TRIGGER', @level1name = N'TRG_FEATURE_STAT_UPDATE';
+    END
+END
 GO
-
+*/
 PRINT N'Trigger TRG_FEATURE_STAT_UPDATE đã được tạo thành công';
 GO
