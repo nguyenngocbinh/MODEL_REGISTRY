@@ -4,7 +4,7 @@ Mô tả: Tạo trigger TRG_FEATURE_STAT_UPDATE để tự động cập nhật 
       khi có thay đổi trong dữ liệu làm mới hoặc giá trị đặc trưng
 Tác giả: Nguyễn Ngọc Bình
 Ngày tạo: 2025-05-16
-Phiên bản: 1.1 - Sửa lỗi column không tồn tại
+Phiên bản: 1.2 - Sửa lỗi bảng và column không tồn tại
 */
 
 USE MODEL_REGISTRY
@@ -13,6 +13,32 @@ GO
 -- Kiểm tra nếu trigger đã tồn tại thì xóa
 IF OBJECT_ID('dbo.TRG_FEATURE_STAT_UPDATE', 'TR') IS NOT NULL
     DROP TRIGGER dbo.TRG_FEATURE_STAT_UPDATE;
+GO
+
+-- Kiểm tra nếu bảng FEATURE_REFRESH_LOG không tồn tại thì tạo mới
+IF OBJECT_ID('MODEL_REGISTRY.dbo.FEATURE_REFRESH_LOG', 'U') IS NULL
+BEGIN
+    CREATE TABLE MODEL_REGISTRY.dbo.FEATURE_REFRESH_LOG (
+        REFRESH_ID INT IDENTITY(1,1) PRIMARY KEY,
+        FEATURE_ID INT NOT NULL,
+        REFRESH_BATCH_ID NVARCHAR(50) NULL,
+        REFRESH_START_TIME DATETIME NOT NULL DEFAULT GETDATE(),
+        REFRESH_END_TIME DATETIME NULL,
+        REFRESH_STATUS NVARCHAR(20) NOT NULL, -- 'STARTED', 'COMPLETED', 'FAILED', 'PARTIAL'
+        REFRESH_TYPE NVARCHAR(50) NOT NULL, -- 'FULL', 'INCREMENTAL', 'DELTA', 'RESTATEMENT'
+        RECORDS_PROCESSED INT NULL,
+        RECORDS_UPDATED INT NULL,
+        FEATURE_NEW_STATS NVARCHAR(MAX) NULL, -- JSON string với thống kê mới
+        CREATED_BY NVARCHAR(50) DEFAULT SUSER_NAME(),
+        CREATED_DATE DATETIME DEFAULT GETDATE(),
+        FOREIGN KEY (FEATURE_ID) REFERENCES MODEL_REGISTRY.dbo.FEATURE_REGISTRY(FEATURE_ID)
+    );
+    
+    CREATE INDEX IDX_FEATURE_REFRESH_FEATURE_ID ON MODEL_REGISTRY.dbo.FEATURE_REFRESH_LOG(FEATURE_ID);
+    CREATE INDEX IDX_FEATURE_REFRESH_STATUS ON MODEL_REGISTRY.dbo.FEATURE_REFRESH_LOG(REFRESH_STATUS);
+    
+    PRINT N'Đã tạo bảng FEATURE_REFRESH_LOG để lưu lịch sử làm mới đặc trưng';
+END
 GO
 
 -- Kiểm tra xem column FEATURE_IMPORTANCE có tồn tại trong bảng FEATURE_REGISTRY hay không
@@ -403,63 +429,37 @@ BEGIN
         );
         
         -- Cập nhật trạng thái các mô hình bị ảnh hưởng bởi đặc trưng không ổn định
-        -- Chỉ cập nhật nếu đặc trưng là quan trọng đối với mô hình (FEATURE_IMPORTANCE > 0.5)
-        -- Chỉ chạy nếu có cột FEATURE_IMPORTANCE
-        IF EXISTS (
-            SELECT 1 
-            FROM sys.columns 
-            WHERE object_id = OBJECT_ID('MODEL_REGISTRY.dbo.FEATURE_MODEL_MAPPING') 
-            AND name = 'FEATURE_IMPORTANCE'
-        )
+        -- Kiểm tra xem bảng MODEL_REGISTRY có tồn tại hay không
+        IF OBJECT_ID('MODEL_REGISTRY.dbo.MODEL_REGISTRY', 'U') IS NOT NULL
         BEGIN
-            UPDATE mr
-            SET 
-                MODEL_STATUS = 'NEEDS_REVIEW',
-                UPDATED_BY = SUSER_SNAME(),
-                UPDATED_DATE = GETDATE()
-            FROM MODEL_REGISTRY.dbo.MODEL_REGISTRY mr
-            JOIN MODEL_REGISTRY.dbo.FEATURE_MODEL_MAPPING fmm ON mr.MODEL_ID = fmm.MODEL_ID
-            JOIN MODEL_REGISTRY.dbo.FEATURE_STATS fs ON fmm.FEATURE_ID = fs.FEATURE_ID
-            JOIN @FeaturesToUpdate f ON fs.FEATURE_ID = f.FEATURE_ID
-            WHERE fs.STABILITY_INDEX > 0.25 -- Đặc trưng không ổn định
-              AND fmm.FEATURE_IMPORTANCE > 0.5 -- Đặc trưng quan trọng đối với mô hình
-              AND fmm.IS_ACTIVE = 1
-              AND mr.IS_ACTIVE = 1
-              AND mr.MODEL_STATUS = 'ACTIVE'; -- Chỉ cập nhật nếu mô hình đang hoạt động
+            -- Kiểm tra xem bảng FEATURE_MODEL_MAPPING và cột FEATURE_IMPORTANCE có tồn tại không
+            IF OBJECT_ID('MODEL_REGISTRY.dbo.FEATURE_MODEL_MAPPING', 'U') IS NOT NULL
+            AND EXISTS (
+                SELECT 1 
+                FROM sys.columns 
+                WHERE object_id = OBJECT_ID('MODEL_REGISTRY.dbo.FEATURE_MODEL_MAPPING') 
+                AND name = 'FEATURE_IMPORTANCE'
+            )
+            BEGIN
+                UPDATE mr
+                SET 
+                    MODEL_STATUS = 'NEEDS_REVIEW',
+                    UPDATED_BY = SUSER_SNAME(),
+                    UPDATED_DATE = GETDATE()
+                FROM MODEL_REGISTRY.dbo.MODEL_REGISTRY mr
+                JOIN MODEL_REGISTRY.dbo.FEATURE_MODEL_MAPPING fmm ON mr.MODEL_ID = fmm.MODEL_ID
+                JOIN MODEL_REGISTRY.dbo.FEATURE_STATS fs ON fmm.FEATURE_ID = fs.FEATURE_ID
+                JOIN @FeaturesToUpdate f ON fs.FEATURE_ID = f.FEATURE_ID
+                WHERE fs.STABILITY_INDEX > 0.25 -- Đặc trưng không ổn định
+                  AND fmm.FEATURE_IMPORTANCE > 0.5 -- Đặc trưng quan trọng đối với mô hình
+                  AND fmm.IS_ACTIVE = 1
+                  AND mr.IS_ACTIVE = 1
+                  AND mr.MODEL_STATUS = 'ACTIVE'; -- Chỉ cập nhật nếu mô hình đang hoạt động
+            END
         END
     END
 END;
 GO
 
--- Thêm comment cho trigger
--- Kiểm tra nếu đối tượng tồn tại trước khi thêm extended property
-/*
-IF EXISTS (SELECT * FROM sys.triggers WHERE name = 'TRG_FEATURE_STAT_UPDATE')
-BEGIN
-    -- Kiểm tra nếu extended property đã tồn tại
-    IF NOT EXISTS (
-        SELECT * 
-        FROM sys.extended_properties 
-        WHERE major_id = OBJECT_ID('dbo.TRG_FEATURE_STAT_UPDATE')
-          AND name = 'MS_Description'
-    )
-    BEGIN
-        EXEC sys.sp_addextendedproperty 
-            @name = N'MS_Description', 
-            @value = N'Trigger tự động cập nhật thống kê của đặc trưng khi có thay đổi trong dữ liệu làm mới', 
-            @level0type = N'SCHEMA', @level0name = N'dbo', 
-            @level1type = N'TRIGGER', @level1name = N'TRG_FEATURE_STAT_UPDATE';
-    END
-    ELSE
-    BEGIN
-        EXEC sys.sp_updateextendedproperty 
-            @name = N'MS_Description', 
-            @value = N'Trigger tự động cập nhật thống kê của đặc trưng khi có thay đổi trong dữ liệu làm mới', 
-            @level0type = N'SCHEMA', @level0name = N'dbo', 
-            @level1type = N'TRIGGER', @level1name = N'TRG_FEATURE_STAT_UPDATE';
-    END
-END
-GO
-*/
 PRINT N'Trigger TRG_FEATURE_STAT_UPDATE đã được tạo thành công';
 GO

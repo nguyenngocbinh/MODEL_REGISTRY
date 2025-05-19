@@ -3,7 +3,7 @@ Tên file: 05_trg_audit_feature_registry.sql
 Mô tả: Tạo trigger TRG_AUDIT_FEATURE_REGISTRY để ghi nhật ký thay đổi trong bảng FEATURE_REGISTRY
 Tác giả: Nguyễn Ngọc Bình
 Ngày tạo: 2025-05-16
-Phiên bản: 1.1 - Sửa lỗi truy cập cột động
+Phiên bản: 1.2 - Sửa lỗi truy cập cột động và kiểm tra đầy đủ các bảng liên quan
 */
 
 USE MODEL_REGISTRY
@@ -33,6 +33,30 @@ IF OBJECT_ID('dbo.TRG_AUDIT_FEATURE_REGISTRY', 'TR') IS NOT NULL
     DROP TRIGGER dbo.TRG_AUDIT_FEATURE_REGISTRY;
 GO
 
+-- Kiểm tra xem bảng FEATURE_MODEL_MAPPING có tồn tại không
+IF OBJECT_ID('MODEL_REGISTRY.dbo.FEATURE_MODEL_MAPPING', 'U') IS NULL
+BEGIN
+    -- Tạo bảng FEATURE_MODEL_MAPPING nếu chưa tồn tại
+    CREATE TABLE MODEL_REGISTRY.dbo.FEATURE_MODEL_MAPPING (
+        MAPPING_ID INT IDENTITY(1,1) PRIMARY KEY,
+        MODEL_ID INT NOT NULL,
+        FEATURE_ID INT NOT NULL,
+        USAGE_TYPE NVARCHAR(50) DEFAULT 'INPUT',
+        IS_MANDATORY BIT DEFAULT 1,
+        IS_ACTIVE BIT DEFAULT 1,
+        CREATED_BY NVARCHAR(50) DEFAULT SUSER_NAME(),
+        CREATED_DATE DATETIME DEFAULT GETDATE(),
+        UPDATED_BY NVARCHAR(50) NULL,
+        UPDATED_DATE DATETIME NULL,
+        FOREIGN KEY (MODEL_ID) REFERENCES MODEL_REGISTRY.dbo.MODEL_REGISTRY(MODEL_ID),
+        FOREIGN KEY (FEATURE_ID) REFERENCES MODEL_REGISTRY.dbo.FEATURE_REGISTRY(FEATURE_ID),
+        CONSTRAINT UC_MODEL_FEATURE UNIQUE (MODEL_ID, FEATURE_ID)
+    );
+    
+    PRINT N'Đã tạo bảng FEATURE_MODEL_MAPPING để quản lý mối quan hệ giữa mô hình và đặc trưng';
+END
+GO
+
 -- Tạo trigger TRG_AUDIT_FEATURE_REGISTRY
 CREATE TRIGGER dbo.TRG_AUDIT_FEATURE_REGISTRY
 ON MODEL_REGISTRY.dbo.FEATURE_REGISTRY
@@ -57,25 +81,43 @@ BEGIN
         MODEL_LIST NVARCHAR(MAX)
     );
     
-    -- Xác định các mô hình bị ảnh hưởng bởi việc thay đổi đặc trưng
-    INSERT INTO @AffectedModels (FEATURE_ID, MODEL_LIST)
-    SELECT 
-        f.FEATURE_ID,
-        STRING_AGG(CONVERT(NVARCHAR(10), fmm.MODEL_ID), ', ') AS MODEL_LIST
-    FROM (
-        SELECT FEATURE_ID FROM inserted
-        UNION
-        SELECT FEATURE_ID FROM deleted
-        WHERE FEATURE_ID IS NOT NULL
-    ) f
-    LEFT JOIN MODEL_REGISTRY.dbo.FEATURE_MODEL_MAPPING fmm ON f.FEATURE_ID = fmm.FEATURE_ID
-    WHERE fmm.IS_ACTIVE = 1 OR fmm.IS_ACTIVE IS NULL
-    GROUP BY f.FEATURE_ID;
+    -- Kiểm tra xem bảng FEATURE_MODEL_MAPPING có tồn tại không và có dữ liệu không
+    IF OBJECT_ID('MODEL_REGISTRY.dbo.FEATURE_MODEL_MAPPING', 'U') IS NOT NULL
+    BEGIN
+        -- Xác định các mô hình bị ảnh hưởng bởi việc thay đổi đặc trưng
+        INSERT INTO @AffectedModels (FEATURE_ID, MODEL_LIST)
+        SELECT 
+            f.FEATURE_ID,
+            STRING_AGG(CONVERT(NVARCHAR(10), fmm.MODEL_ID), ', ') AS MODEL_LIST
+        FROM (
+            SELECT FEATURE_ID FROM inserted
+            UNION
+            SELECT FEATURE_ID FROM deleted
+            WHERE FEATURE_ID IS NOT NULL
+        ) f
+        LEFT JOIN MODEL_REGISTRY.dbo.FEATURE_MODEL_MAPPING fmm ON f.FEATURE_ID = fmm.FEATURE_ID
+        WHERE fmm.IS_ACTIVE = 1 OR fmm.IS_ACTIVE IS NULL
+        GROUP BY f.FEATURE_ID;
+    END
+    ELSE
+    BEGIN
+        -- Nếu bảng FEATURE_MODEL_MAPPING không tồn tại, vẫn tạo bản ghi cho đặc trưng
+        INSERT INTO @AffectedModels (FEATURE_ID, MODEL_LIST)
+        SELECT 
+            f.FEATURE_ID,
+            NULL AS MODEL_LIST
+        FROM (
+            SELECT FEATURE_ID FROM inserted
+            UNION
+            SELECT FEATURE_ID FROM deleted
+            WHERE FEATURE_ID IS NOT NULL
+        ) f;
+    END
     
     -- Ghi nhật ký cho các thao tác INSERT
     IF @action_type = 'INSERT'
     BEGIN
-        -- Lấy tất cả các cột cần theo dõi
+-- Lấy tất cả các cột cần theo dõi
         DECLARE @InsertColumns TABLE (
             column_id INT, 
             column_name NVARCHAR(128),
@@ -414,41 +456,39 @@ BEGIN
         -- Nếu là thao tác UPDATE hoặc DELETE, có thể cần cập nhật trạng thái các mô hình bị ảnh hưởng
         IF @action_type IN ('UPDATE', 'DELETE')
         BEGIN
-            -- Lấy ID các mô hình từ chuỗi MODEL_LIST
-            DECLARE @models_to_update TABLE (MODEL_ID INT);
-            
-            INSERT INTO @models_to_update
-            SELECT DISTINCT TRY_CAST(value AS INT) AS MODEL_ID
-            FROM @AffectedModels
-            CROSS APPLY STRING_SPLIT(MODEL_LIST, ',')
-            WHERE MODEL_LIST IS NOT NULL AND TRIM(value) <> '';
-            
-            -- Cập nhật trạng thái cho các mô hình bị ảnh hưởng
-            UPDATE MODEL_REGISTRY.dbo.MODEL_REGISTRY
-            SET 
-                MODEL_STATUS = 'NEEDS_REVIEW',
-                UPDATED_BY = SUSER_SNAME(),
-                UPDATED_DATE = GETDATE()
-            WHERE MODEL_ID IN (SELECT MODEL_ID FROM @models_to_update)
-            AND IS_ACTIVE = 1
-            AND MODEL_STATUS = 'ACTIVE';
-            
-            IF @@ROWCOUNT > 0
-                PRINT N'CẢNH BÁO: Các mô hình bị ảnh hưởng đã được đánh dấu là "NEEDS_REVIEW"';
+            -- Kiểm tra xem bảng MODEL_REGISTRY có tồn tại không
+            IF OBJECT_ID('MODEL_REGISTRY.dbo.MODEL_REGISTRY', 'U') IS NOT NULL
+            BEGIN
+                -- Lấy ID các mô hình từ chuỗi MODEL_LIST
+                DECLARE @models_to_update TABLE (MODEL_ID INT);
+                
+                INSERT INTO @models_to_update
+                SELECT DISTINCT TRY_CAST(value AS INT) AS MODEL_ID
+                FROM @AffectedModels
+                CROSS APPLY STRING_SPLIT(MODEL_LIST, ',')
+                WHERE MODEL_LIST IS NOT NULL AND TRIM(value) <> '';
+                
+                -- Cập nhật trạng thái cho các mô hình bị ảnh hưởng
+                UPDATE MODEL_REGISTRY.dbo.MODEL_REGISTRY
+                SET 
+                    MODEL_STATUS = 'NEEDS_REVIEW',
+                    UPDATED_BY = SUSER_SNAME(),
+                    UPDATED_DATE = GETDATE()
+                WHERE MODEL_ID IN (SELECT MODEL_ID FROM @models_to_update)
+                AND IS_ACTIVE = 1
+                AND MODEL_STATUS = 'ACTIVE';
+                
+                IF @@ROWCOUNT > 0
+                    PRINT N'CẢNH BÁO: Các mô hình bị ảnh hưởng đã được đánh dấu là "NEEDS_REVIEW"';
+            END
+            ELSE
+            BEGIN
+                PRINT N'CẢNH BÁO: Bảng MODEL_REGISTRY không tồn tại. Không thể cập nhật trạng thái mô hình.';
+            END
         END
     END
 END;
 GO
 
-/*
--- Thêm comment cho trigger
-EXEC sys.sp_addextendedproperty @name = N'MS_Description', 
-    @value = N'Trigger ghi nhật ký thay đổi trong bảng FEATURE_REGISTRY và theo dõi các mô hình bị ảnh hưởng', 
-    @level0type = N'SCHEMA', @level0name = N'dbo', 
-    @level1type = N'TRIGGER',  @level1name = N'TRG_AUDIT_FEATURE_REGISTRY';
-GO
-*/
-
--- Không hỗ trợ mô tả cho trigger 
 PRINT N'Trigger TRG_AUDIT_FEATURE_REGISTRY đã được tạo thành công';
 GO

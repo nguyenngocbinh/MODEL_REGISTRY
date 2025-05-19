@@ -4,7 +4,7 @@ Mô tả: Tạo trigger TRG_UPDATE_MODEL_FEATURE_DEPENDENCIES để tự động
       giữa mô hình và đặc trưng khi có thay đổi trong mối quan hệ
 Tác giả: Nguyễn Ngọc Bình
 Ngày tạo: 2025-05-16
-Phiên bản: 1.1 - Sửa lỗi column không tồn tại
+Phiên bản: 1.2 - Sửa lỗi column không tồn tại và kiểm tra đầy đủ các bảng liên quan
 */
 
 USE MODEL_REGISTRY
@@ -15,6 +15,38 @@ IF OBJECT_ID('dbo.TRG_UPDATE_MODEL_FEATURE_DEPENDENCIES', 'TR') IS NOT NULL
     DROP TRIGGER dbo.TRG_UPDATE_MODEL_FEATURE_DEPENDENCIES;
 GO
 
+-- Kiểm tra và tạo bảng FEATURE_MODEL_MAPPING nếu chưa tồn tại
+IF OBJECT_ID('MODEL_REGISTRY.dbo.FEATURE_MODEL_MAPPING', 'U') IS NULL
+BEGIN
+    -- Tạo bảng FEATURE_MODEL_MAPPING nếu chưa tồn tại
+    CREATE TABLE MODEL_REGISTRY.dbo.FEATURE_MODEL_MAPPING (
+        MAPPING_ID INT IDENTITY(1,1) PRIMARY KEY,
+        MODEL_ID INT NOT NULL,
+        FEATURE_ID INT NOT NULL,
+        USAGE_TYPE NVARCHAR(50) NOT NULL DEFAULT 'INPUT', -- 'INPUT', 'OUTPUT', 'DERIVED', 'CALCULATED', 'AUXILIARY'
+        IS_MANDATORY BIT DEFAULT 1,
+        FEATURE_IMPORTANCE FLOAT NULL, -- Mức độ quan trọng của đặc trưng đối với mô hình
+        FEATURE_WEIGHT FLOAT NULL, -- Trọng số của đặc trưng trong mô hình
+        TRANSFORMATION_APPLIED NVARCHAR(MAX) NULL, -- JSON mô tả các phép biến đổi được áp dụng
+        DESCRIPTION NVARCHAR(500) NULL,
+        CREATED_BY NVARCHAR(50) DEFAULT SUSER_NAME(),
+        CREATED_DATE DATETIME DEFAULT GETDATE(),
+        UPDATED_BY NVARCHAR(50) NULL,
+        UPDATED_DATE DATETIME NULL,
+        IS_ACTIVE BIT DEFAULT 1,
+        FOREIGN KEY (MODEL_ID) REFERENCES MODEL_REGISTRY.dbo.MODEL_REGISTRY(MODEL_ID),
+        FOREIGN KEY (FEATURE_ID) REFERENCES MODEL_REGISTRY.dbo.FEATURE_REGISTRY(FEATURE_ID),
+        CONSTRAINT UC_MODEL_FEATURE UNIQUE (MODEL_ID, FEATURE_ID)
+    );
+    
+    CREATE INDEX IDX_FEATURE_MODEL_MAPPING_FEATURE ON MODEL_REGISTRY.dbo.FEATURE_MODEL_MAPPING(FEATURE_ID);
+    CREATE INDEX IDX_FEATURE_MODEL_MAPPING_MODEL ON MODEL_REGISTRY.dbo.FEATURE_MODEL_MAPPING(MODEL_ID);
+    CREATE INDEX IDX_FEATURE_MODEL_MAPPING_ACTIVE ON MODEL_REGISTRY.dbo.FEATURE_MODEL_MAPPING(IS_ACTIVE);
+    
+    PRINT N'Đã tạo bảng FEATURE_MODEL_MAPPING để quản lý mối quan hệ giữa mô hình và đặc trưng';
+END
+GO
+
 -- Tạo trigger TRG_UPDATE_MODEL_FEATURE_DEPENDENCIES
 CREATE TRIGGER dbo.TRG_UPDATE_MODEL_FEATURE_DEPENDENCIES
 ON MODEL_REGISTRY.dbo.FEATURE_MODEL_MAPPING
@@ -22,6 +54,13 @@ AFTER INSERT, UPDATE
 AS
 BEGIN
     SET NOCOUNT ON;
+    
+    -- Kiểm tra xem bảng FEATURE_DEPENDENCIES có tồn tại không
+    IF OBJECT_ID('MODEL_REGISTRY.dbo.FEATURE_DEPENDENCIES', 'U') IS NULL
+    BEGIN
+        PRINT N'Bảng FEATURE_DEPENDENCIES không tồn tại. Không thể tiếp tục.';
+        RETURN;
+    END
     
     -- Biến để lưu trữ thông tin đặc trưng và mô hình
     DECLARE @FeatureModelPairs TABLE (
@@ -208,59 +247,92 @@ BEGIN
     JOIN @FeaturePairsToCalculate fpc ON fd.DEPENDENCY_ID = fpc.DEPENDENCY_ID
     WHERE fd.CORRELATION_VALUE IS NOT NULL;
     
+    -- Kiểm tra xem bảng MODEL_DATA_QUALITY_LOG có tồn tại không trước khi ghi log
+    IF OBJECT_ID('MODEL_REGISTRY.dbo.MODEL_DATA_QUALITY_LOG', 'U') IS NULL
+    BEGIN
+        PRINT N'Bảng MODEL_DATA_QUALITY_LOG không tồn tại. Không thể ghi log chất lượng dữ liệu.';
+        RETURN;
+    END
+    
     -- Ghi nhật ký cảnh báo cho các đặc trưng có VIF cao (đa cộng tuyến cao)
-    INSERT INTO MODEL_REGISTRY.dbo.MODEL_DATA_QUALITY_LOG (
-        SOURCE_TABLE_ID,
-        COLUMN_ID,
-        PROCESS_DATE,
-        ISSUE_TYPE,
-        ISSUE_DESCRIPTION,
-        ISSUE_CATEGORY,
-        SEVERITY,
-        IMPACT_DESCRIPTION,
-        DETECTION_METHOD,
-        REMEDIATION_STATUS,
-        CREATED_BY,
-        CREATED_DATE
+    -- Kiểm tra xem tất cả các bảng và cột cần thiết có tồn tại không
+    IF EXISTS (
+        SELECT 1 
+        FROM MODEL_REGISTRY.dbo.FEATURE_DEPENDENCIES fd
+        JOIN MODEL_REGISTRY.dbo.FEATURE_REGISTRY fr1 ON fd.FEATURE_ID = fr1.FEATURE_ID
+        JOIN MODEL_REGISTRY.dbo.FEATURE_REGISTRY fr2 ON fd.DEPENDS_ON_FEATURE_ID = fr2.FEATURE_ID
+        WHERE fd.VIF_VALUE > 10 -- Chỉ cảnh báo khi VIF > 10
+          AND fd.IS_ACTIVE = 1
     )
-    SELECT 
-        fst.SOURCE_TABLE_ID,
-        cd.COLUMN_ID,
-        GETDATE(),
-        'MULTICOLLINEARITY',
-        'Phát hiện đa cộng tuyến cao (VIF = ' + CAST(ROUND(fd.VIF_VALUE, 2) AS NVARCHAR) + ') giữa đặc trưng ' + fr1.FEATURE_NAME + ' và ' + fr2.FEATURE_NAME,
-        'FEATURE_QUALITY',
-        CASE 
-            WHEN fd.VIF_VALUE > 20 THEN 'HIGH'
-            WHEN fd.VIF_VALUE > 10 THEN 'MEDIUM'
-            ELSE 'LOW'
-        END,
-        'Đa cộng tuyến cao có thể làm giảm độ ổn định của mô hình và khó giải thích các hệ số.',
-        'AUTOMATIC_DEPENDENCY_ANALYSIS',
-        'OPEN',
-        SUSER_SNAME(),
-        GETDATE()
-    FROM MODEL_REGISTRY.dbo.FEATURE_DEPENDENCIES fd
-    JOIN MODEL_REGISTRY.dbo.FEATURE_REGISTRY fr1 ON fd.FEATURE_ID = fr1.FEATURE_ID
-    JOIN MODEL_REGISTRY.dbo.FEATURE_REGISTRY fr2 ON fd.DEPENDS_ON_FEATURE_ID = fr2.FEATURE_ID
-    JOIN MODEL_REGISTRY.dbo.FEATURE_SOURCE_TABLES fst ON fr1.FEATURE_ID = fst.FEATURE_ID
-    LEFT JOIN MODEL_REGISTRY.dbo.MODEL_SOURCE_TABLES st ON fst.SOURCE_TABLE_ID = st.SOURCE_TABLE_ID
-    LEFT JOIN MODEL_REGISTRY.dbo.MODEL_COLUMN_DETAILS cd ON st.SOURCE_TABLE_ID = cd.SOURCE_TABLE_ID AND fst.SOURCE_COLUMN_NAME = cd.COLUMN_NAME
-    WHERE fd.VIF_VALUE > 10 -- Chỉ cảnh báo khi VIF > 10
-      AND fd.IS_ACTIVE = 1
-      AND fst.IS_PRIMARY_SOURCE = 1
-      AND fd.LAST_UPDATED > DATEADD(HOUR, -24, GETDATE()) -- Chỉ xem xét những cập nhật trong 24 giờ qua
-      AND NOT EXISTS (
-          -- Kiểm tra xem đã có cảnh báo tương tự trong 30 ngày qua chưa
-          SELECT 1
-          FROM MODEL_REGISTRY.dbo.MODEL_DATA_QUALITY_LOG dq
-          WHERE dq.SOURCE_TABLE_ID = fst.SOURCE_TABLE_ID
-            AND (dq.COLUMN_ID = cd.COLUMN_ID OR (dq.COLUMN_ID IS NULL AND cd.COLUMN_ID IS NULL))
-            AND dq.ISSUE_TYPE = 'MULTICOLLINEARITY'
-            AND dq.ISSUE_DESCRIPTION LIKE '%' + fr1.FEATURE_NAME + '%' + fr2.FEATURE_NAME + '%'
-            AND dq.PROCESS_DATE > DATEADD(DAY, -30, GETDATE())
-            AND dq.REMEDIATION_STATUS IN ('OPEN', 'IN_PROGRESS')
-      );
+    BEGIN
+        -- Kiểm tra xem bảng FEATURE_SOURCE_TABLES có tồn tại không
+        IF OBJECT_ID('MODEL_REGISTRY.dbo.FEATURE_SOURCE_TABLES', 'U') IS NULL
+        BEGIN
+            PRINT N'Bảng FEATURE_SOURCE_TABLES không tồn tại. Không thể ghi log VIF cao.';
+            RETURN;
+        END
+        
+        -- Kiểm tra xem bảng MODEL_SOURCE_TABLES và MODEL_COLUMN_DETAILS có tồn tại không
+        IF OBJECT_ID('MODEL_REGISTRY.dbo.MODEL_SOURCE_TABLES', 'U') IS NULL OR 
+           OBJECT_ID('MODEL_REGISTRY.dbo.MODEL_COLUMN_DETAILS', 'U') IS NULL
+        BEGIN
+            PRINT N'Bảng MODEL_SOURCE_TABLES hoặc MODEL_COLUMN_DETAILS không tồn tại. Không thể ghi log VIF cao.';
+            RETURN;
+        END
+        
+        INSERT INTO MODEL_REGISTRY.dbo.MODEL_DATA_QUALITY_LOG (
+            SOURCE_TABLE_ID,
+            COLUMN_ID,
+            PROCESS_DATE,
+            ISSUE_TYPE,
+            ISSUE_DESCRIPTION,
+            ISSUE_CATEGORY,
+            SEVERITY,
+            IMPACT_DESCRIPTION,
+            DETECTION_METHOD,
+            REMEDIATION_STATUS,
+            CREATED_BY,
+            CREATED_DATE
+        )
+        SELECT 
+            fst.SOURCE_TABLE_ID,
+            cd.COLUMN_ID,
+            GETDATE(),
+            'MULTICOLLINEARITY',
+            'Phát hiện đa cộng tuyến cao (VIF = ' + CAST(ROUND(fd.VIF_VALUE, 2) AS NVARCHAR) + ') giữa đặc trưng ' + fr1.FEATURE_NAME + ' và ' + fr2.FEATURE_NAME,
+            'FEATURE_QUALITY',
+            CASE 
+                WHEN fd.VIF_VALUE > 20 THEN 'HIGH'
+                WHEN fd.VIF_VALUE > 10 THEN 'MEDIUM'
+                ELSE 'LOW'
+            END,
+            'Đa cộng tuyến cao có thể làm giảm độ ổn định của mô hình và khó giải thích các hệ số.',
+            'AUTOMATIC_DEPENDENCY_ANALYSIS',
+            'OPEN',
+            SUSER_SNAME(),
+            GETDATE()
+        FROM MODEL_REGISTRY.dbo.FEATURE_DEPENDENCIES fd
+        JOIN MODEL_REGISTRY.dbo.FEATURE_REGISTRY fr1 ON fd.FEATURE_ID = fr1.FEATURE_ID
+        JOIN MODEL_REGISTRY.dbo.FEATURE_REGISTRY fr2 ON fd.DEPENDS_ON_FEATURE_ID = fr2.FEATURE_ID
+        JOIN MODEL_REGISTRY.dbo.FEATURE_SOURCE_TABLES fst ON fr1.FEATURE_ID = fst.FEATURE_ID
+        LEFT JOIN MODEL_REGISTRY.dbo.MODEL_SOURCE_TABLES st ON fst.SOURCE_TABLE_ID = st.SOURCE_TABLE_ID
+        LEFT JOIN MODEL_REGISTRY.dbo.MODEL_COLUMN_DETAILS cd ON st.SOURCE_TABLE_ID = cd.SOURCE_TABLE_ID AND fst.SOURCE_COLUMN_NAME = cd.COLUMN_NAME
+        WHERE fd.VIF_VALUE > 10 -- Chỉ cảnh báo khi VIF > 10
+          AND fd.IS_ACTIVE = 1
+          AND fst.IS_PRIMARY_SOURCE = 1
+          AND fd.LAST_UPDATED > DATEADD(HOUR, -24, GETDATE()) -- Chỉ xem xét những cập nhật trong 24 giờ qua
+          AND NOT EXISTS (
+              -- Kiểm tra xem đã có cảnh báo tương tự trong 30 ngày qua chưa
+              SELECT 1
+              FROM MODEL_REGISTRY.dbo.MODEL_DATA_QUALITY_LOG dq
+              WHERE dq.SOURCE_TABLE_ID = fst.SOURCE_TABLE_ID
+                AND (dq.COLUMN_ID = cd.COLUMN_ID OR (dq.COLUMN_ID IS NULL AND cd.COLUMN_ID IS NULL))
+                AND dq.ISSUE_TYPE = 'MULTICOLLINEARITY'
+                AND dq.ISSUE_DESCRIPTION LIKE '%' + fr1.FEATURE_NAME + '%' + fr2.FEATURE_NAME + '%'
+                AND dq.PROCESS_DATE > DATEADD(DAY, -30, GETDATE())
+                AND dq.REMEDIATION_STATUS IN ('OPEN', 'IN_PROGRESS')
+          );
+    END
     
     -- Cập nhật hệ số hồi quy cho các đặc trưng dựa trên mối quan hệ với mô hình
     -- Đây cũng là một giả lập, trong thực tế cần truy xuất hệ số từ kết quả huấn luyện mô hình
@@ -305,37 +377,6 @@ BEGIN
     END
 END;
 GO
-
-/*
--- Thêm comment cho trigger
--- Kiểm tra nếu đối tượng tồn tại trước khi thêm extended property
-IF EXISTS (SELECT * FROM sys.triggers WHERE name = 'TRG_UPDATE_MODEL_FEATURE_DEPENDENCIES')
-BEGIN
-    -- Kiểm tra nếu extended property đã tồn tại
-    IF NOT EXISTS (
-        SELECT * 
-        FROM sys.extended_properties 
-        WHERE major_id = OBJECT_ID('dbo.TRG_UPDATE_MODEL_FEATURE_DEPENDENCIES')
-          AND name = 'MS_Description'
-    )
-    BEGIN
-        EXEC sys.sp_addextendedproperty 
-            @name = N'MS_Description', 
-            @value = N'Trigger tự động cập nhật thông tin phụ thuộc giữa mô hình và đặc trưng khi có thay đổi trong mối quan hệ', 
-            @level0type = N'SCHEMA', @level0name = N'dbo', 
-            @level1type = N'TRIGGER', @level1name = N'TRG_UPDATE_MODEL_FEATURE_DEPENDENCIES';
-    END
-    ELSE
-    BEGIN
-        EXEC sys.sp_updateextendedproperty 
-            @name = N'MS_Description', 
-            @value = N'Trigger tự động cập nhật thông tin phụ thuộc giữa mô hình và đặc trưng khi có thay đổi trong mối quan hệ', 
-            @level0type = N'SCHEMA', @level0name = N'dbo', 
-            @level1type = N'TRIGGER', @level1name = N'TRG_UPDATE_MODEL_FEATURE_DEPENDENCIES';
-    END
-END
-GO
-*/
 
 PRINT N'Trigger TRG_UPDATE_MODEL_FEATURE_DEPENDENCIES đã được tạo thành công';
 GO
