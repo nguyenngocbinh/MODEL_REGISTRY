@@ -186,11 +186,20 @@ BEGIN
 END;
 GO
 
--- Thêm comment cho trigger
-EXEC sys.sp_addextendedproperty @name = N'MS_Description', 
-    @value = N'Trigger tự động kiểm tra tính khả dụng của các bảng nguồn khi thêm mới hoặc cập nhật mối quan hệ giữa mô hình và bảng dữ liệu', 
-    @level0type = N'SCHEMA', @level0name = N'dbo', 
-    @level1type = N'TRIGGER',  @level1name = N'TRG_VALIDATE_MODEL_SOURCES';
+-- Thêm comment cho trigger - Sửa lỗi ở đây
+PRINT N'Thêm extended property cho trigger TRG_VALIDATE_MODEL_SOURCES';
+BEGIN TRY
+    EXEC sys.sp_addextendedproperty 
+        @name = N'MS_Description', 
+        @value = N'Trigger tự động kiểm tra tính khả dụng của các bảng nguồn khi thêm mới hoặc cập nhật mối quan hệ giữa mô hình và bảng dữ liệu', 
+        @level0type = N'SCHEMA', 
+        @level0name = N'dbo', 
+        @level1type = N'TRIGGER', 
+        @level1name = N'TRG_VALIDATE_MODEL_SOURCES';
+END TRY
+BEGIN CATCH
+    PRINT N'Lỗi khi thêm extended property: ' + ERROR_MESSAGE();
+END CATCH
 GO
 
 PRINT N'Trigger TRG_VALIDATE_MODEL_SOURCES đã được tạo thành công';

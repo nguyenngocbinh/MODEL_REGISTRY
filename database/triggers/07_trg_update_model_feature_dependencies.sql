@@ -4,7 +4,7 @@ Mô tả: Tạo trigger TRG_UPDATE_MODEL_FEATURE_DEPENDENCIES để tự động
       giữa mô hình và đặc trưng khi có thay đổi trong mối quan hệ
 Tác giả: Nguyễn Ngọc Bình
 Ngày tạo: 2025-05-16
-Phiên bản: 1.0
+Phiên bản: 1.1 - Sửa lỗi column không tồn tại
 */
 
 USE MODEL_REGISTRY
@@ -67,7 +67,10 @@ BEGIN
         SELECT 
             FEATURE_ID,
             DEPENDS_ON_FEATURE_ID,
-            COUNT(DISTINCT MODEL_ID) AS MODEL_COUNT
+            COUNT(DISTINCT MODEL_ID) AS MODEL_COUNT,
+            -- Lưu trữ loại sử dụng cho mỗi đặc trưng trong cặp
+            MAX(USAGE_TYPE) AS USAGE_TYPE,
+            MAX(DEPENDS_ON_USAGE_TYPE) AS DEPENDS_ON_USAGE_TYPE
         FROM FeaturePairs
         GROUP BY FEATURE_ID, DEPENDS_ON_FEATURE_ID
     ),
@@ -147,14 +150,18 @@ BEGIN
     DECLARE @FeaturePairsToCalculate TABLE (
         FEATURE_ID INT,
         DEPENDS_ON_FEATURE_ID INT,
-        DEPENDENCY_ID INT
+        DEPENDENCY_ID INT,
+        DEPENDENCY_STRENGTH FLOAT,
+        DEPENDENCY_TYPE NVARCHAR(50)
     );
     
-    INSERT INTO @FeaturePairsToCalculate (FEATURE_ID, DEPENDS_ON_FEATURE_ID, DEPENDENCY_ID)
+    INSERT INTO @FeaturePairsToCalculate (FEATURE_ID, DEPENDS_ON_FEATURE_ID, DEPENDENCY_ID, DEPENDENCY_STRENGTH, DEPENDENCY_TYPE)
     SELECT 
         fd.FEATURE_ID,
         fd.DEPENDS_ON_FEATURE_ID,
-        fd.DEPENDENCY_ID
+        fd.DEPENDENCY_ID,
+        fd.DEPENDENCY_STRENGTH,
+        fd.DEPENDENCY_TYPE
     FROM MODEL_REGISTRY.dbo.FEATURE_DEPENDENCIES fd
     JOIN @FeatureModelPairs fmp ON fd.FEATURE_ID = fmp.FEATURE_ID
     WHERE fd.DEPENDENCY_TYPE = 'CORRELATION'
@@ -167,13 +174,13 @@ BEGIN
     SET 
         -- Giả lập tương quan trong khoảng -1 đến 1
         CORRELATION_VALUE = CASE 
-            WHEN fd.DEPENDENCY_STRENGTH > 0.8 THEN RAND() * 0.5 + 0.5 -- Độ mạnh cao -> tương quan dương mạnh
-            WHEN fd.DEPENDENCY_STRENGTH > 0.6 THEN RAND() * 0.6 + 0.2 -- Độ mạnh trung bình -> tương quan dương trung bình
+            WHEN fpc.DEPENDENCY_STRENGTH > 0.8 THEN RAND() * 0.5 + 0.5 -- Độ mạnh cao -> tương quan dương mạnh
+            WHEN fpc.DEPENDENCY_STRENGTH > 0.6 THEN RAND() * 0.6 + 0.2 -- Độ mạnh trung bình -> tương quan dương trung bình
             ELSE RAND() * 0.4 - 0.2 -- Độ mạnh thấp -> tương quan yếu
         END,
         -- Tính toán thông tin tương hỗ dựa trên tương quan (giả lập)
         MUTUAL_INFORMATION = CASE 
-            WHEN fd.DEPENDENCY_STRENGTH > 0.7 THEN RAND() * 0.5 + 0.5
+            WHEN fpc.DEPENDENCY_STRENGTH > 0.7 THEN RAND() * 0.5 + 0.5
             ELSE RAND() * 0.3
         END,
         LAST_UPDATED = GETDATE(),
@@ -261,9 +268,9 @@ BEGIN
     SET 
         -- Giả lập hệ số hồi quy dựa trên độ mạnh của phụ thuộc và loại phụ thuộc
         REGRESSION_COEFFICIENT = CASE 
-            WHEN fd.DEPENDENCY_TYPE = 'DERIVATION' THEN RAND() * fd.DEPENDENCY_STRENGTH * 2 - 1
-            WHEN fd.DEPENDENCY_TYPE = 'CALCULATION' THEN RAND() * fd.DEPENDENCY_STRENGTH
-            WHEN fd.DEPENDENCY_TYPE = 'CORRELATION' THEN 
+            WHEN fpc.DEPENDENCY_TYPE = 'DERIVATION' THEN RAND() * fpc.DEPENDENCY_STRENGTH * 2 - 1
+            WHEN fpc.DEPENDENCY_TYPE = 'CALCULATION' THEN RAND() * fpc.DEPENDENCY_STRENGTH
+            WHEN fpc.DEPENDENCY_TYPE = 'CORRELATION' THEN 
                 CASE 
                     WHEN fd.CORRELATION_VALUE > 0 THEN RAND() * fd.CORRELATION_VALUE
                     ELSE RAND() * fd.CORRELATION_VALUE * (-1)
@@ -299,12 +306,36 @@ BEGIN
 END;
 GO
 
+/*
 -- Thêm comment cho trigger
-EXEC sys.sp_addextendedproperty @name = N'MS_Description', 
-    @value = N'Trigger tự động cập nhật thông tin phụ thuộc giữa mô hình và đặc trưng khi có thay đổi trong mối quan hệ', 
-    @level0type = N'SCHEMA', @level0name = N'dbo', 
-    @level1type = N'TRIGGER',  @level1name = N'TRG_UPDATE_MODEL_FEATURE_DEPENDENCIES';
+-- Kiểm tra nếu đối tượng tồn tại trước khi thêm extended property
+IF EXISTS (SELECT * FROM sys.triggers WHERE name = 'TRG_UPDATE_MODEL_FEATURE_DEPENDENCIES')
+BEGIN
+    -- Kiểm tra nếu extended property đã tồn tại
+    IF NOT EXISTS (
+        SELECT * 
+        FROM sys.extended_properties 
+        WHERE major_id = OBJECT_ID('dbo.TRG_UPDATE_MODEL_FEATURE_DEPENDENCIES')
+          AND name = 'MS_Description'
+    )
+    BEGIN
+        EXEC sys.sp_addextendedproperty 
+            @name = N'MS_Description', 
+            @value = N'Trigger tự động cập nhật thông tin phụ thuộc giữa mô hình và đặc trưng khi có thay đổi trong mối quan hệ', 
+            @level0type = N'SCHEMA', @level0name = N'dbo', 
+            @level1type = N'TRIGGER', @level1name = N'TRG_UPDATE_MODEL_FEATURE_DEPENDENCIES';
+    END
+    ELSE
+    BEGIN
+        EXEC sys.sp_updateextendedproperty 
+            @name = N'MS_Description', 
+            @value = N'Trigger tự động cập nhật thông tin phụ thuộc giữa mô hình và đặc trưng khi có thay đổi trong mối quan hệ', 
+            @level0type = N'SCHEMA', @level0name = N'dbo', 
+            @level1type = N'TRIGGER', @level1name = N'TRG_UPDATE_MODEL_FEATURE_DEPENDENCIES';
+    END
+END
 GO
+*/
 
 PRINT N'Trigger TRG_UPDATE_MODEL_FEATURE_DEPENDENCIES đã được tạo thành công';
 GO
