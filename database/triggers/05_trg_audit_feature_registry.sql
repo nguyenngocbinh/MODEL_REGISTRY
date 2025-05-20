@@ -10,9 +10,9 @@ USE MODEL_REGISTRY
 GO
 
 -- Kiểm tra và tạo bảng audit nếu chưa tồn tại
-IF OBJECT_ID('MODEL_REGISTRY.dbo.AUDIT_FEATURE_REGISTRY', 'U') IS NULL
+IF OBJECT_ID('MODEL_REGISTRY.dbo.TRG_AUDIT_FEATURE_REGISTRY', 'U') IS NULL
 BEGIN
-    CREATE TABLE MODEL_REGISTRY.dbo.AUDIT_FEATURE_REGISTRY (
+    CREATE TABLE MODEL_REGISTRY.dbo.TRG_AUDIT_FEATURE_REGISTRY (
         AUDIT_ID INT IDENTITY(1,1) PRIMARY KEY,
         FEATURE_ID INT NOT NULL,
         ACTION_TYPE NVARCHAR(10) NOT NULL, -- 'INSERT', 'UPDATE', 'DELETE'
@@ -182,7 +182,7 @@ BEGIN
                      @value = @insert_value OUTPUT;
                 
                 -- Ghi lại trong bảng audit
-                INSERT INTO MODEL_REGISTRY.dbo.AUDIT_FEATURE_REGISTRY (
+                INSERT INTO MODEL_REGISTRY.dbo.TRG_AUDIT_FEATURE_REGISTRY (
                     FEATURE_ID, 
                     ACTION_TYPE, 
                     FIELD_NAME, 
@@ -303,7 +303,7 @@ BEGIN
                    (@update_old_value <> @update_new_value)
                 BEGIN
                     -- Ghi lại trong bảng audit
-                    INSERT INTO MODEL_REGISTRY.dbo.AUDIT_FEATURE_REGISTRY (
+                    INSERT INTO MODEL_REGISTRY.dbo.TRG_AUDIT_FEATURE_REGISTRY (
                         FEATURE_ID, 
                         ACTION_TYPE, 
                         FIELD_NAME, 
@@ -410,7 +410,7 @@ BEGIN
                      @value = @delete_value OUTPUT;
                 
                 -- Ghi lại trong bảng audit
-                INSERT INTO MODEL_REGISTRY.dbo.AUDIT_FEATURE_REGISTRY (
+                INSERT INTO MODEL_REGISTRY.dbo.TRG_AUDIT_FEATURE_REGISTRY (
                     FEATURE_ID, 
                     ACTION_TYPE, 
                     FIELD_NAME, 
