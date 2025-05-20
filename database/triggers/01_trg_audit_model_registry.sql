@@ -7,9 +7,9 @@ Phiên bản: 1.0
 */
 
 -- Kiểm tra và tạo bảng audit nếu chưa tồn tại
-IF OBJECT_ID('MODEL_REGISTRY.dbo.AUDIT_MODEL_REGISTRY', 'U') IS NULL
+IF OBJECT_ID('MODEL_REGISTRY.dbo.TRG_AUDIT_MODEL_REGISTRY', 'U') IS NULL
 BEGIN
-    CREATE TABLE MODEL_REGISTRY.dbo.AUDIT_MODEL_REGISTRY (
+    CREATE TABLE MODEL_REGISTRY.dbo.TRG_AUDIT_MODEL_REGISTRY (
         AUDIT_ID INT IDENTITY(1,1) PRIMARY KEY,
         MODEL_ID INT NOT NULL,
         ACTION_TYPE NVARCHAR(10) NOT NULL, -- 'INSERT', 'UPDATE', 'DELETE'
@@ -105,7 +105,7 @@ BEGIN
                     @value = @insert_value OUTPUT;
                 
                 -- Thêm bản ghi audit
-                INSERT INTO MODEL_REGISTRY.dbo.AUDIT_MODEL_REGISTRY (
+                INSERT INTO MODEL_REGISTRY.dbo.TRG_AUDIT_MODEL_REGISTRY (
                     MODEL_ID, 
                     ACTION_TYPE, 
                     FIELD_NAME, 
@@ -209,7 +209,7 @@ BEGIN
                    (@update_old_value IS NOT NULL AND @update_new_value IS NULL) OR
                    (@update_old_value <> @update_new_value)
                 BEGIN
-                    INSERT INTO MODEL_REGISTRY.dbo.AUDIT_MODEL_REGISTRY (
+                    INSERT INTO MODEL_REGISTRY.dbo.TRG_AUDIT_MODEL_REGISTRY (
                         MODEL_ID, 
                         ACTION_TYPE, 
                         FIELD_NAME, 
@@ -304,7 +304,7 @@ BEGIN
                     @value = @delete_value OUTPUT;
                 
                 -- Thêm bản ghi audit
-                INSERT INTO MODEL_REGISTRY.dbo.AUDIT_MODEL_REGISTRY (
+                INSERT INTO MODEL_REGISTRY.dbo.TRG_AUDIT_MODEL_REGISTRY (
                     MODEL_ID, 
                     ACTION_TYPE, 
                     FIELD_NAME, 

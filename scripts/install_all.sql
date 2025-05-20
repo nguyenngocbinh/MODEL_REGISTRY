@@ -2,315 +2,168 @@
 Tên file: install_all.sql
 Mô tả: Script chính để cài đặt toàn bộ hệ thống Đăng Ký Mô Hình
 Tác giả: Nguyễn Ngọc Bình
-Ngày tạo: 2025-05-10
-Phiên bản: 1.2 - Optimized for logging
+Ngày tạo: 2025-05-20
+Phiên bản: 1.2 - Simplified version
 */
 
 SET NOCOUNT ON;
 GO
 
--- Lấy đường dẫn file log từ tham số
-DECLARE @LogFilePath NVARCHAR(500) = '$(LogFilePath)';
-DECLARE @LogCmd NVARCHAR(1000);
-DECLARE @Now NVARCHAR(50);
-
--- Hàm để tạo chuỗi thời gian hiện tại
-CREATE OR ALTER FUNCTION dbo.GetCurrentTimeString()
-RETURNS NVARCHAR(50)
-AS
-BEGIN
-    RETURN CONVERT(NVARCHAR, GETDATE(), 120);
-END
+-- Cleanup các cursor có thể còn sót lại
+IF CURSOR_STATUS('global','file_cursor') >= -1
+    DEALLOCATE file_cursor;
 GO
 
--- Thủ tục để ghi log
-CREATE OR ALTER PROCEDURE dbo.LogMessage
-    @LogFilePath NVARCHAR(500),
-    @Message NVARCHAR(1000)
-AS
-BEGIN
+-- Đặt đường dẫn cơ sở
+DECLARE @BasePath NVARCHAR(500) = 'd:\TPB\MODEL_REGISTRY';
+
+PRINT '=============================================';
+PRINT N'BẮT ĐẦU CÀI ĐẶT HỆ THỐNG ĐĂNG KÝ MÔ HÌNH';
+PRINT '=============================================';
+
+-- Danh sách các file cần cài đặt theo thứ tự
+DECLARE @FileList TABLE (
+    ID INT IDENTITY(1,1),
+    FileType NVARCHAR(50),
+    FilePath NVARCHAR(500)
+);
+
+-- Thêm các file theo thứ tự cài đặt
+INSERT INTO @FileList (FileType, FilePath) VALUES
+-- Tables
+('TABLE', @BasePath + '\database\schema\01_model_type.sql'),
+('TABLE', @BasePath + '\database\schema\02_model_registry.sql'),
+('TABLE', @BasePath + '\database\schema\03_model_parameters.sql'),
+('TABLE', @BasePath + '\database\schema\04_model_source_tables.sql'),
+('TABLE', @BasePath + '\database\schema\05_model_column_details.sql'),
+('TABLE', @BasePath + '\database\schema\06_model_table_usage.sql'),
+('TABLE', @BasePath + '\database\schema\07_model_table_mapping.sql'),
+('TABLE', @BasePath + '\database\schema\08_model_segment_mapping.sql'),
+('TABLE', @BasePath + '\database\schema\09_model_validation_results.sql'),
+('TABLE', @BasePath + '\database\schema\10_model_source_refresh_log.sql'),
+('TABLE', @BasePath + '\database\schema\11_model_data_quality_log.sql'),
+('TABLE', @BasePath + '\database\schema\12_feature_registry.sql'),
+('TABLE', @BasePath + '\database\schema\13_feature_transformations.sql'),
+('TABLE', @BasePath + '\database\schema\14_feature_source_tables.sql'),
+('TABLE', @BasePath + '\database\schema\15_feature_values.sql'),
+('TABLE', @BasePath + '\database\schema\16_feature_stats.sql'),
+('TABLE', @BasePath + '\database\schema\17_feature_dependencies.sql'),
+('TABLE', @BasePath + '\database\schema\18_feature_model_mapping.sql'),
+('TABLE', @BasePath + '\database\schema\19_feature_refresh_log.sql'),
+-- Views
+('VIEW', @BasePath + '\database\views\01_vw_model_table_relationships.sql'),
+('VIEW', @BasePath + '\database\views\02_vw_model_type_info.sql'),
+('VIEW', @BasePath + '\database\views\03_vw_model_performance.sql'),
+('VIEW', @BasePath + '\database\views\04_vw_data_quality_summary.sql'),
+('VIEW', @BasePath + '\database\views\05_vw_model_lineage.sql'),
+('VIEW', @BasePath + '\database\views\06_vw_feature_catalog.sql'),
+('VIEW', @BasePath + '\database\views\07_vw_feature_model_usage.sql'),
+('VIEW', @BasePath + '\database\views\08_vw_feature_dependencies.sql'),
+('VIEW', @BasePath + '\database\views\09_vw_feature_lineage.sql'),
+-- Functions
+('FUNCTION', @BasePath + '\database\functions\01_fn_get_model_score.sql'),
+('FUNCTION', @BasePath + '\database\functions\02_fn_calculate_psi.sql'),
+('FUNCTION', @BasePath + '\database\functions\03_fn_calculate_ks.sql'),
+('FUNCTION', @BasePath + '\database\functions\04_fn_get_model_version_info.sql'),
+('FUNCTION', @BasePath + '\database\functions\05_fn_calculate_feature_drift.sql'),
+('FUNCTION', @BasePath + '\database\functions\06_fn_get_feature_history.sql'),
+('FUNCTION', @BasePath + '\database\functions\07_fn_validate_feature.sql'),
+-- Triggers
+('TRIGGER', @BasePath + '\database\triggers\01_trg_audit_model_registry.sql'),
+('TRIGGER', @BasePath + '\database\triggers\02_trg_audit_model_parameters.sql'),
+('TRIGGER', @BasePath + '\database\triggers\03_trg_validate_model_sources.sql'),
+('TRIGGER', @BasePath + '\database\triggers\04_trg_update_model_status.sql'),
+('TRIGGER', @BasePath + '\database\triggers\05_trg_audit_feature_registry.sql'),
+('TRIGGER', @BasePath + '\database\triggers\06_trg_feature_stat_update.sql'),
+('TRIGGER', @BasePath + '\database\triggers\07_trg_update_model_feature_dependencies.sql'),
+-- Sample Data
+('DATA', @BasePath + '\database\sample_data\01_model_type_data.sql'),
+('DATA', @BasePath + '\database\sample_data\02_model_registry_data.sql'),
+('DATA', @BasePath + '\database\sample_data\03_model_parameters_data.sql'),
+('DATA', @BasePath + '\database\sample_data\04_model_source_tables_data.sql'),
+('DATA', @BasePath + '\database\sample_data\05_model_table_usage_data.sql'),
+('DATA', @BasePath + '\database\sample_data\06_model_validation_results_data.sql'),
+('DATA', @BasePath + '\database\sample_data\07_model_segment_mapping_data.sql'),
+('DATA', @BasePath + '\database\sample_data\08_model_column_details_data.sql'),
+('DATA', @BasePath + '\database\sample_data\09_feature_registry_data.sql'),
+('DATA', @BasePath + '\database\sample_data\10_feature_transformations_data.sql'),
+('DATA', @BasePath + '\database\sample_data\11_feature_source_tables_data.sql'),
+('DATA', @BasePath + '\database\sample_data\12_feature_model_mapping_data.sql');
+
+-- Cài đặt từng file
+BEGIN TRY
+    DECLARE @CurrentID INT = 1;
+    DECLARE @MaxID INT;
+    DECLARE @CurrentType NVARCHAR(50);
+    DECLARE @CurrentPath NVARCHAR(500);
+    DECLARE @LastType NVARCHAR(50) = '';
     DECLARE @Cmd NVARCHAR(4000);
-    DECLARE @TimeStr NVARCHAR(50) = dbo.GetCurrentTimeString();
     
-    SET @Cmd = 'echo [' + @TimeStr + '] ' + @Message + ' >> "' + @LogFilePath + '"';
+    SELECT @MaxID = MAX(ID) FROM @FileList;
     
-    -- Sử dụng xp_cmdshell nếu có quyền
-    DECLARE @CmdShellEnabled INT;
-    EXEC sp_configure 'show advanced options', 1;
-    RECONFIGURE;
-    EXEC sp_configure 'xp_cmdshell', 1;
-    RECONFIGURE;
+    -- Kích hoạt xp_cmdshell
+    EXEC sp_configure 'show advanced options', 1; RECONFIGURE;
+    EXEC sp_configure 'xp_cmdshell', 1; RECONFIGURE;
     
-    EXEC xp_cmdshell @Cmd, no_output;
+    WHILE @CurrentID <= @MaxID
+    BEGIN
+        SELECT @CurrentType = FileType, @CurrentPath = FilePath 
+        FROM @FileList WHERE ID = @CurrentID;
+        
+        -- In header cho nhóm mới
+        IF @LastType <> @CurrentType
+        BEGIN
+            PRINT '';
+            PRINT N'Đang cài đặt các ' + @CurrentType;
+            PRINT '---------------------------------------------';
+            SET @LastType = @CurrentType;
+        END
+        
+        -- Kiểm tra file tồn tại
+        DECLARE @FileCheck TABLE (result NVARCHAR(255));
+        SET @Cmd = 'IF EXIST "' + @CurrentPath + '" (echo EXISTS) ELSE (echo NOT_FOUND)';
+        
+        DELETE FROM @FileCheck;
+        INSERT INTO @FileCheck EXEC xp_cmdshell @Cmd;
+        
+        IF EXISTS (SELECT 1 FROM @FileCheck WHERE result = 'EXISTS')
+        BEGIN
+            PRINT 'Executing: ' + @CurrentPath;
+            SET @Cmd = 'sqlcmd -E -d ' + DB_NAME() + ' -i "' + @CurrentPath + '" -b';
+            EXEC xp_cmdshell @Cmd;
+        END
+        ELSE
+        BEGIN
+            PRINT 'WARNING: File not found - ' + @CurrentPath;
+        END
+        
+        SET @CurrentID = @CurrentID + 1;
+    END
     
-    -- Vô hiệu hóa lại xp_cmdshell nếu cần
-    EXEC sp_configure 'xp_cmdshell', 0;
-    RECONFIGURE;
-    EXEC sp_configure 'show advanced options', 0;
-    RECONFIGURE;
-END
-GO
+    -- Tắt xp_cmdshell
+    EXEC sp_configure 'xp_cmdshell', 0; RECONFIGURE;
+    EXEC sp_configure 'show advanced options', 0; RECONFIGURE;
+    
+    PRINT '';
+    PRINT '=============================================';
+    PRINT N'CÀI ĐẶT HỆ THỐNG HOÀN TẤT!';
+    PRINT '=============================================';
+    
+END TRY
+BEGIN CATCH
+    -- Tắt xp_cmdshell trong trường hợp lỗi
+    EXEC sp_configure 'xp_cmdshell', 0; RECONFIGURE;
+    EXEC sp_configure 'show advanced options', 0; RECONFIGURE;
+    
+    PRINT '';
+    PRINT N'LỖI: ' + ERROR_MESSAGE();
+    PRINT N'Vui lòng kiểm tra và chạy lại script.';
+END CATCH;
 
--- Ghi log bắt đầu cài đặt
-EXEC dbo.LogMessage @LogFilePath, 'install_all.sql: Bắt đầu cài đặt database';
-
-PRINT '=============================================';
-PRINT 'BẮT ĐẦU CÀI ĐẶT HỆ THỐNG ĐĂNG KÝ MÔ HÌNH';
-PRINT '=============================================';
 PRINT '';
-GO
-
--- Tạo bảng (Schema)
-PRINT 'Bắt đầu tạo cấu trúc dữ liệu...';
-PRINT '-----------------------------------------';
-EXEC dbo.LogMessage @LogFilePath, 'Bắt đầu tạo cấu trúc dữ liệu';
-
-PRINT 'Tạo bảng MODEL_TYPE...';
-EXEC dbo.LogMessage @LogFilePath, 'Đang tạo bảng MODEL_TYPE...';
-:r .\database\schema\01_model_type.sql
-EXEC dbo.LogMessage @LogFilePath, 'Hoàn thành tạo bảng MODEL_TYPE';
-PRINT '';
-
-PRINT 'Tạo bảng MODEL_REGISTRY...';
-EXEC dbo.LogMessage @LogFilePath, 'Đang tạo bảng MODEL_REGISTRY...';
-:r .\database\schema\02_model_registry.sql
-EXEC dbo.LogMessage @LogFilePath, 'Hoàn thành tạo bảng MODEL_REGISTRY';
-PRINT '';
-
-PRINT 'Tạo bảng MODEL_PARAMETERS...';
-EXEC dbo.LogMessage @LogFilePath, 'Đang tạo bảng MODEL_PARAMETERS...';
-:r .\database\schema\03_model_parameters.sql
-EXEC dbo.LogMessage @LogFilePath, 'Hoàn thành tạo bảng MODEL_PARAMETERS';
-PRINT '';
-
-PRINT 'Tạo bảng MODEL_SOURCE_TABLES...';
-EXEC dbo.LogMessage @LogFilePath, 'Đang tạo bảng MODEL_SOURCE_TABLES...';
-:r .\database\schema\04_model_source_tables.sql
-EXEC dbo.LogMessage @LogFilePath, 'Hoàn thành tạo bảng MODEL_SOURCE_TABLES';
-PRINT '';
-
-PRINT 'Tạo bảng MODEL_COLUMN_DETAILS...';
-EXEC dbo.LogMessage @LogFilePath, 'Đang tạo bảng MODEL_COLUMN_DETAILS...';
-:r .\database\schema\05_model_column_details.sql
-EXEC dbo.LogMessage @LogFilePath, 'Hoàn thành tạo bảng MODEL_COLUMN_DETAILS';
-PRINT '';
-
-PRINT 'Tạo bảng MODEL_TABLE_USAGE...';
-EXEC dbo.LogMessage @LogFilePath, 'Đang tạo bảng MODEL_TABLE_USAGE...';
-:r .\database\schema\06_model_table_usage.sql
-EXEC dbo.LogMessage @LogFilePath, 'Hoàn thành tạo bảng MODEL_TABLE_USAGE';
-PRINT '';
-
-PRINT 'Tạo bảng MODEL_TABLE_MAPPING...';
-EXEC dbo.LogMessage @LogFilePath, 'Đang tạo bảng MODEL_TABLE_MAPPING...';
-:r .\database\schema\07_model_table_mapping.sql
-EXEC dbo.LogMessage @LogFilePath, 'Hoàn thành tạo bảng MODEL_TABLE_MAPPING';
-PRINT '';
-
-PRINT 'Tạo bảng MODEL_SEGMENT_MAPPING...';
-EXEC dbo.LogMessage @LogFilePath, 'Đang tạo bảng MODEL_SEGMENT_MAPPING...';
-:r .\database\schema\08_model_segment_mapping.sql
-EXEC dbo.LogMessage @LogFilePath, 'Hoàn thành tạo bảng MODEL_SEGMENT_MAPPING';
-PRINT '';
-
-PRINT 'Tạo bảng MODEL_VALIDATION_RESULTS...';
-EXEC dbo.LogMessage @LogFilePath, 'Đang tạo bảng MODEL_VALIDATION_RESULTS...';
-:r .\database\schema\09_model_validation_results.sql
-EXEC dbo.LogMessage @LogFilePath, 'Hoàn thành tạo bảng MODEL_VALIDATION_RESULTS';
-PRINT '';
-
-PRINT 'Tạo bảng MODEL_SOURCE_REFRESH_LOG...';
-EXEC dbo.LogMessage @LogFilePath, 'Đang tạo bảng MODEL_SOURCE_REFRESH_LOG...';
-:r .\database\schema\10_model_source_refresh_log.sql
-EXEC dbo.LogMessage @LogFilePath, 'Hoàn thành tạo bảng MODEL_SOURCE_REFRESH_LOG';
-PRINT '';
-
-PRINT 'Tạo bảng MODEL_DATA_QUALITY_LOG...';
-EXEC dbo.LogMessage @LogFilePath, 'Đang tạo bảng MODEL_DATA_QUALITY_LOG...';
-:r .\database\schema\11_model_data_quality_log.sql
-EXEC dbo.LogMessage @LogFilePath, 'Hoàn thành tạo bảng MODEL_DATA_QUALITY_LOG';
-PRINT '';
-
-PRINT 'Cấu trúc dữ liệu đã được tạo thành công.';
-EXEC dbo.LogMessage @LogFilePath, 'Tất cả các bảng đã được tạo thành công';
-PRINT '';
-
--- Tạo các view
-PRINT 'Bắt đầu tạo các view...';
-PRINT '-----------------------------------------';
-EXEC dbo.LogMessage @LogFilePath, 'Bắt đầu tạo các view';
-
-PRINT 'Tạo view VW_MODEL_TABLE_RELATIONSHIPS...';
-EXEC dbo.LogMessage @LogFilePath, 'Đang tạo view VW_MODEL_TABLE_RELATIONSHIPS...';
-:r .\database\views\01_vw_model_table_relationships.sql
-EXEC dbo.LogMessage @LogFilePath, 'Hoàn thành tạo view VW_MODEL_TABLE_RELATIONSHIPS';
-PRINT '';
-
-PRINT 'Tạo view VW_MODEL_TYPE_INFO...';
-EXEC dbo.LogMessage @LogFilePath, 'Đang tạo view VW_MODEL_TYPE_INFO...';
-:r .\database\views\02_vw_model_type_info.sql
-EXEC dbo.LogMessage @LogFilePath, 'Hoàn thành tạo view VW_MODEL_TYPE_INFO';
-PRINT '';
-
-PRINT 'Tạo view VW_MODEL_PERFORMANCE...';
-EXEC dbo.LogMessage @LogFilePath, 'Đang tạo view VW_MODEL_PERFORMANCE...';
-:r .\database\views\03_vw_model_performance.sql
-EXEC dbo.LogMessage @LogFilePath, 'Hoàn thành tạo view VW_MODEL_PERFORMANCE';
-PRINT '';
-
-PRINT 'Các view đã được tạo thành công.';
-EXEC dbo.LogMessage @LogFilePath, 'Tất cả các view đã được tạo thành công';
-PRINT '';
-
--- Tạo các stored procedures
-PRINT 'Bắt đầu tạo các stored procedures...';
-PRINT '-----------------------------------------';
-EXEC dbo.LogMessage @LogFilePath, 'Bắt đầu tạo các stored procedures';
-
-PRINT 'Tạo procedure GET_MODEL_TABLES...';
-EXEC dbo.LogMessage @LogFilePath, 'Đang tạo procedure GET_MODEL_TABLES...';
-:r .\database\procedures\01_get_model_tables.sql
-EXEC dbo.LogMessage @LogFilePath, 'Hoàn thành tạo procedure GET_MODEL_TABLES';
-PRINT '';
-
-PRINT 'Tạo procedure GET_TABLE_MODELS...';
-EXEC dbo.LogMessage @LogFilePath, 'Đang tạo procedure GET_TABLE_MODELS...';
-:r .\database\procedures\02_get_table_models.sql
-EXEC dbo.LogMessage @LogFilePath, 'Hoàn thành tạo procedure GET_TABLE_MODELS';
-PRINT '';
-
-PRINT 'Tạo procedure VALIDATE_MODEL_SOURCES...';
-EXEC dbo.LogMessage @LogFilePath, 'Đang tạo procedure VALIDATE_MODEL_SOURCES...';
-:r .\database\procedures\03_validate_model_sources.sql
-EXEC dbo.LogMessage @LogFilePath, 'Hoàn thành tạo procedure VALIDATE_MODEL_SOURCES';
-PRINT '';
-
-PRINT 'Tạo procedure LOG_SOURCE_TABLE_REFRESH...';
-EXEC dbo.LogMessage @LogFilePath, 'Đang tạo procedure LOG_SOURCE_TABLE_REFRESH...';
-:r .\database\procedures\04_log_source_table_refresh.sql
-EXEC dbo.LogMessage @LogFilePath, 'Hoàn thành tạo procedure LOG_SOURCE_TABLE_REFRESH';
-PRINT '';
-
-PRINT 'Tạo procedure GET_APPROPRIATE_MODEL...';
-EXEC dbo.LogMessage @LogFilePath, 'Đang tạo procedure GET_APPROPRIATE_MODEL...';
-:r .\database\procedures\05_get_appropriate_model.sql
-EXEC dbo.LogMessage @LogFilePath, 'Hoàn thành tạo procedure GET_APPROPRIATE_MODEL';
-PRINT '';
-
-PRINT 'Tạo procedure GET_MODEL_PERFORMANCE_HISTORY...';
-EXEC dbo.LogMessage @LogFilePath, 'Đang tạo procedure GET_MODEL_PERFORMANCE_HISTORY...';
-:r .\database\procedures\06_get_model_performance_history.sql
-EXEC dbo.LogMessage @LogFilePath, 'Hoàn thành tạo procedure GET_MODEL_PERFORMANCE_HISTORY';
-PRINT '';
-
-PRINT 'Các stored procedures đã được tạo thành công.';
-EXEC dbo.LogMessage @LogFilePath, 'Tất cả các stored procedures đã được tạo thành công';
-PRINT '';
-
--- Tạo các functions
-PRINT 'Bắt đầu tạo các functions...';
-PRINT '-----------------------------------------';
-EXEC dbo.LogMessage @LogFilePath, 'Bắt đầu tạo các functions';
-
-PRINT 'Tạo function FN_GET_MODEL_SCORE...';
-EXEC dbo.LogMessage @LogFilePath, 'Đang tạo function FN_GET_MODEL_SCORE...';
-:r .\database\functions\01_fn_get_model_score.sql
-EXEC dbo.LogMessage @LogFilePath, 'Hoàn thành tạo function FN_GET_MODEL_SCORE';
-PRINT '';
-
-PRINT 'Tạo function FN_CALCULATE_PSI...';
-EXEC dbo.LogMessage @LogFilePath, 'Đang tạo function FN_CALCULATE_PSI...';
-:r .\database\functions\02_fn_calculate_psi.sql
-EXEC dbo.LogMessage @LogFilePath, 'Hoàn thành tạo function FN_CALCULATE_PSI';
-PRINT '';
-
-PRINT 'Các functions đã được tạo thành công.';
-EXEC dbo.LogMessage @LogFilePath, 'Tất cả các functions đã được tạo thành công';
-PRINT '';
-
--- Tạo các triggers
-PRINT 'Bắt đầu tạo các triggers...';
-PRINT '-----------------------------------------';
-EXEC dbo.LogMessage @LogFilePath, 'Bắt đầu tạo các triggers';
-
-PRINT 'Tạo trigger TRG_AUDIT_MODEL_REGISTRY...';
-EXEC dbo.LogMessage @LogFilePath, 'Đang tạo trigger TRG_AUDIT_MODEL_REGISTRY...';
-:r .\database\triggers\01_trg_audit_model_registry.sql
-EXEC dbo.LogMessage @LogFilePath, 'Hoàn thành tạo trigger TRG_AUDIT_MODEL_REGISTRY';
-PRINT '';
-
-PRINT 'Tạo trigger TRG_AUDIT_MODEL_PARAMETERS...';
-EXEC dbo.LogMessage @LogFilePath, 'Đang tạo trigger TRG_AUDIT_MODEL_PARAMETERS...';
-:r .\database\triggers\02_trg_audit_model_parameters.sql
-EXEC dbo.LogMessage @LogFilePath, 'Hoàn thành tạo trigger TRG_AUDIT_MODEL_PARAMETERS';
-PRINT '';
-
-PRINT 'Các triggers đã được tạo thành công.';
-EXEC dbo.LogMessage @LogFilePath, 'Tất cả các triggers đã được tạo thành công';
-PRINT '';
-
--- Nhập dữ liệu mẫu
-PRINT 'Bắt đầu nhập dữ liệu mẫu...';
-PRINT '-----------------------------------------';
-EXEC dbo.LogMessage @LogFilePath, 'Bắt đầu nhập dữ liệu mẫu';
-
-PRINT 'Nhập dữ liệu mẫu cho MODEL_TYPE...';
-EXEC dbo.LogMessage @LogFilePath, 'Đang nhập dữ liệu mẫu cho MODEL_TYPE...';
-:r .\database\sample_data\01_model_type_data.sql
-EXEC dbo.LogMessage @LogFilePath, 'Hoàn thành nhập dữ liệu mẫu MODEL_TYPE';
-PRINT '';
-
-PRINT 'Nhập dữ liệu mẫu cho MODEL_REGISTRY...';
-EXEC dbo.LogMessage @LogFilePath, 'Đang nhập dữ liệu mẫu cho MODEL_REGISTRY...';
-:r .\database\sample_data\02_model_registry_data.sql
-EXEC dbo.LogMessage @LogFilePath, 'Hoàn thành nhập dữ liệu mẫu MODEL_REGISTRY';
-PRINT '';
-
-PRINT 'Nhập dữ liệu mẫu cho MODEL_PARAMETERS...';
-EXEC dbo.LogMessage @LogFilePath, 'Đang nhập dữ liệu mẫu cho MODEL_PARAMETERS...';
-:r .\database\sample_data\03_model_parameters_data.sql
-EXEC dbo.LogMessage @LogFilePath, 'Hoàn thành nhập dữ liệu mẫu MODEL_PARAMETERS';
-PRINT '';
-
-PRINT 'Nhập dữ liệu mẫu cho MODEL_SOURCE_TABLES...';
-EXEC dbo.LogMessage @LogFilePath, 'Đang nhập dữ liệu mẫu cho MODEL_SOURCE_TABLES...';
-:r .\database\sample_data\04_model_source_tables_data.sql
-EXEC dbo.LogMessage @LogFilePath, 'Hoàn thành nhập dữ liệu mẫu MODEL_SOURCE_TABLES';
-PRINT '';
-
-PRINT 'Nhập dữ liệu mẫu cho MODEL_TABLE_USAGE...';
-EXEC dbo.LogMessage @LogFilePath, 'Đang nhập dữ liệu mẫu cho MODEL_TABLE_USAGE...';
-:r .\database\sample_data\05_model_table_usage_data.sql
-EXEC dbo.LogMessage @LogFilePath, 'Hoàn thành nhập dữ liệu mẫu MODEL_TABLE_USAGE';
-PRINT '';
-
-PRINT 'Nhập dữ liệu mẫu cho MODEL_VALIDATION_RESULTS...';
-EXEC dbo.LogMessage @LogFilePath, 'Đang nhập dữ liệu mẫu cho MODEL_VALIDATION_RESULTS...';
-:r .\database\sample_data\06_model_validation_results_data.sql
-EXEC dbo.LogMessage @LogFilePath, 'Hoàn thành nhập dữ liệu mẫu MODEL_VALIDATION_RESULTS';
-PRINT '';
-
-PRINT 'Dữ liệu mẫu đã được nhập thành công.';
-EXEC dbo.LogMessage @LogFilePath, 'Tất cả dữ liệu mẫu đã được nhập thành công';
-PRINT '';
-
-PRINT '=============================================';
-PRINT 'CÀI ĐẶT HỆ THỐNG ĐĂNG KÝ MÔ HÌNH HOÀN TẤT';
-PRINT '=============================================';
-PRINT '';
-PRINT 'Thông tin tóm tắt:';
-PRINT '- Database: MODEL_REGISTRY';
-PRINT '- Số bảng: 11';
-PRINT '- Số view: 3';
-PRINT '- Số stored procedures: 6';
-PRINT '- Số functions: 2';
-PRINT '- Số triggers: 2';
-PRINT '';
-PRINT 'Hệ thống đã sẵn sàng để sử dụng.';
-EXEC dbo.LogMessage @LogFilePath, 'Cài đặt hoàn tất - Hệ thống đã sẵn sàng để sử dụng';
-
--- Xóa các thủ tục tạm thời đã tạo cho việc ghi log
-DROP FUNCTION IF EXISTS dbo.GetCurrentTimeString;
-DROP PROCEDURE IF EXISTS dbo.LogMessage;
+PRINT N'Lưu ý:';
+PRINT N'- Nếu có file không tồn tại, hãy kiểm tra đường dẫn';
+PRINT N'- Script sử dụng sqlcmd để thực thi file';
+PRINT N'- Có thể chạy từng file riêng nếu cần thiết';
 
 GO
