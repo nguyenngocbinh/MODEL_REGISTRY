@@ -9,6 +9,9 @@ Phiên bản: 1.2 - Simplified version
 SET NOCOUNT ON;
 GO
 
+USE MODEL_REGISTRY;
+GO
+
 -- Cleanup các cursor có thể còn sót lại
 IF CURSOR_STATUS('global','file_cursor') >= -1
     DEALLOCATE file_cursor;
