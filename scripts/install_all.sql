@@ -9,13 +9,16 @@ Phiên bản: 1.2 - Simplified version
 SET NOCOUNT ON;
 GO
 
+USE MODEL_REGISTRY;
+GO
+
 -- Cleanup các cursor có thể còn sót lại
 IF CURSOR_STATUS('global','file_cursor') >= -1
     DEALLOCATE file_cursor;
 GO
 
 -- Đặt đường dẫn cơ sở
-DECLARE @BasePath NVARCHAR(500) = 'd:\TPB\MODEL_REGISTRY';
+DECLARE @BasePath NVARCHAR(500) = 'D:\PROJECT\GITLAB\MODEL_REGISTRY';
 
 PRINT '=============================================';
 PRINT N'BẮT ĐẦU CÀI ĐẶT HỆ THỐNG ĐĂNG KÝ MÔ HÌNH';
@@ -75,7 +78,8 @@ INSERT INTO @FileList (FileType, FilePath) VALUES
 ('TRIGGER', @BasePath + '\database\triggers\04_trg_update_model_status.sql'),
 ('TRIGGER', @BasePath + '\database\triggers\05_trg_audit_feature_registry.sql'),
 ('TRIGGER', @BasePath + '\database\triggers\06_trg_feature_stat_update.sql'),
-('TRIGGER', @BasePath + '\database\triggers\07_trg_update_model_feature_dependencies.sql'),
+('TRIGGER', @BasePath + '\database\triggers\07_trg_update_model_feature_dependencies.sql')
+/*
 -- Sample Data
 ('DATA', @BasePath + '\database\sample_data\01_model_type_data.sql'),
 ('DATA', @BasePath + '\database\sample_data\02_model_registry_data.sql'),
@@ -88,8 +92,9 @@ INSERT INTO @FileList (FileType, FilePath) VALUES
 ('DATA', @BasePath + '\database\sample_data\09_feature_registry_data.sql'),
 ('DATA', @BasePath + '\database\sample_data\10_feature_transformations_data.sql'),
 ('DATA', @BasePath + '\database\sample_data\11_feature_source_tables_data.sql'),
-('DATA', @BasePath + '\database\sample_data\12_feature_model_mapping_data.sql');
-
+('DATA', @BasePath + '\database\sample_data\12_feature_model_mapping_data.sql')
+*/
+;
 -- Cài đặt từng file
 BEGIN TRY
     DECLARE @CurrentID INT = 1;

@@ -1,0 +1,12 @@
+sqlcmd -L
+
+sqlcmd -S BINHNN2 -E -i "D:\PROJECT\GITLAB\MODEL_REGISTRY\scripts\install_all.sql"
+
+sqlcmd -S "(local)" -d MODEL_REGISTRY -E -i "D:\PROJECT\GITLAB\MODEL_REGISTRY\scripts\uninstall.sql"
+
+python upload_scripts\excel_upload.py model_type "sample_data\feature_registry.xlsx" 
+
+python upload_scripts\excel_upload.py feature_registry  "sample_data\feature_registry.xlsx" 
+
+python upload_scripts\excel_upload.py model_registry  "sample_data\feature_registry.xlsx" 
+

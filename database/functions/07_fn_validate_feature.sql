@@ -3,10 +3,11 @@ Tên file: 07_fn_validate_feature.sql
 Mô tả: Tạo function FN_VALIDATE_FEATURE để kiểm tra tính hợp lệ và chất lượng của đặc trưng
 Tác giả: Nguyễn Ngọc Bình
 Ngày tạo: 2025-05-16
-Phiên bản: 1.0
+Ngày cập nhật: 2025-06-19
+Phiên bản: 1.1
 
 Function này cung cấp các chức năng:
-1. Kiểm tra toàn diện chất lượng của đặc trưng dựa trên nhiều tiêu chí
+1. Kiểm tra toàn diện tính hợp lệ và chất lượng của đặc trưng dựa trên nhiều tiêu chí
 2. Tính điểm chất lượng tổng hợp cho đặc trưng
 3. Phân loại đặc trưng theo mức độ chất lượng
 4. Cung cấp chi tiết về từng kiểm tra và đề xuất cải thiện
@@ -508,7 +509,7 @@ EXEC sys.sp_addextendedproperty @name = N'MS_Description',
     @level1type = N'PROCEDURE',  @level1name = N'SP_VALIDATE_FEATURES';
 GO
 
-PRINT N'Stored Procedure SP_VALIDATE_FEATURES đã được tạo thành công';
+PRINT N'stored Procedure SP_VALIDATE_FEATURES đã được tạo thành công';
 GO
 
 -- Hướng dẫn sử dụng:
