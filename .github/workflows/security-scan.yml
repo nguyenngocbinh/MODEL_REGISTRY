@@ -1,0 +1,253 @@
+name: Security Scanning
+
+on:
+  push:
+    branches: [ main, develop, master ]
+  pull_request:
+    branches: [ main, develop, master ]
+  schedule:
+    # Run security scans weekly
+    - cron: '0 2 * * 1'
+
+jobs:
+  # ===========================
+  # CODE SCANNING
+  # ===========================
+
+  codeql-analysis:
+    name: CodeQL Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ['python', 'javascript']
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+
+      - name: Setup Python
+        if: matrix.language == 'python'
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Setup Node.js
+        if: matrix.language == 'javascript'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        if: matrix.language == 'python'
+        run: |
+          pip install -r requirements.txt || true
+          pip install -r excel_templates/upload_scripts/requirements.txt || true
+
+      - name: Install dependencies
+        if: matrix.language == 'javascript'
+        run: |
+          npm ci || true
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+
+  # ===========================
+  # DEPENDENCY SCANNING
+  # ===========================
+
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: moderate
+
+  # ===========================
+  # PYTHON SECURITY SCANNING
+  # ===========================
+
+  python-security:
+    name: Python Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install security tools
+        run: |
+          pip install bandit safety pip-audit
+
+      - name: Run Bandit security scan
+        run: |
+          echo "Running Bandit security scan..."
+          bandit -r . -f json -o bandit-report.json || true
+          bandit -r . -f txt -o bandit-report.txt || true
+
+      - name: Run Safety check
+        run: |
+          echo "Running Safety vulnerability check..."
+          safety check --json --output safety-report.json || true
+          safety check --output safety-report.txt || true
+
+      - name: Run pip-audit
+        run: |
+          echo "Running pip-audit..."
+          pip-audit --format json --output pip-audit-report.json || true
+          pip-audit --output pip-audit-report.txt || true
+
+      - name: Upload security reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-security-reports
+          path: |
+            bandit-report.*
+            safety-report.*
+            pip-audit-report.*
+          retention-days: 30
+
+  # ===========================
+  # SQL INJECTION SCANNING
+  # ===========================
+
+  sql-security:
+    name: SQL Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install SQL security tools
+        run: |
+          pip install sqlmap-python
+
+      - name: Scan SQL files for potential vulnerabilities
+        run: |
+          echo "Scanning SQL files for potential security issues..."
+          find database/ -name "*.sql" -type f -exec echo "Checking: {}" \; -exec grep -i -E "(exec|execute|sp_executesql|dynamic.*sql)" {} \; || true
+
+      - name: Check for hardcoded credentials
+        run: |
+          echo "Checking for hardcoded credentials in SQL files..."
+          find database/ -name "*.sql" -type f -exec grep -i -E "(password|pwd|secret|key)" {} \; || true
+
+  # ===========================
+  # CONTAINER SCANNING
+  # ===========================
+
+  container-scan:
+    name: Container Security Scan
+    runs-on: ubuntu-latest
+    if: contains(github.event.head_commit.modified, 'Dockerfile') || contains(github.event.head_commit.added, 'Dockerfile')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'your-registry/model-registry:latest'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  # ===========================
+  # SECRET SCANNING
+  # ===========================
+
+  secret-scan:
+    name: Secret Scanning
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run TruffleHog
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: .
+          base: ${{ github.event.before }}
+          head: ${{ github.event.after }}
+          extra_args: --only-verified
+
+      - name: Run GitLeaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          args: --verbose --redact
+
+  # ===========================
+  # SECURITY SUMMARY
+  # ===========================
+
+  security-summary:
+    name: Security Summary
+    runs-on: ubuntu-latest
+    needs: [python-security, sql-security, secret-scan]
+    if: always()
+    steps:
+      - name: Download security reports
+        uses: actions/download-artifact@v4
+        with:
+          name: python-security-reports
+          path: security-reports/
+
+      - name: Generate security summary
+        run: |
+          echo "## Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f "security-reports/bandit-report.txt" ]; then
+            echo "### Bandit Security Scan Results" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat security-reports/bandit-report.txt >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ -f "security-reports/safety-report.txt" ]; then
+            echo "### Safety Vulnerability Check Results" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat security-reports/safety-report.txt >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ -f "security-reports/pip-audit-report.txt" ]; then
+            echo "### pip-audit Results" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat security-reports/pip-audit-report.txt >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi 

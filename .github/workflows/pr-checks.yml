@@ -1,0 +1,110 @@
+name: Pull Request Checks
+
+on:
+  pull_request:
+    branches: [ main, develop, master ]
+    paths:
+      - 'database/**'
+      - 'scripts/**'
+      - 'tests/**'
+      - 'docs/**'
+      - 'reports/**'
+
+env:
+  DB_SERVER: ${{ secrets.DB_SERVER || 'localhost' }}
+  DB_NAME_TEST: MODEL_REGISTRY_TEST
+
+jobs:
+  validate-pr:
+    name: Validate PR Changes
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SQL Server Tools
+        uses: microsoft/sqlserver-actions/setup-sqlcmd@v1
+
+      - name: Check SQL syntax
+        run: |
+          echo "Validating SQL syntax for changed files..."
+          git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | grep '\.sql$' | while read file; do
+            if [ -f "$file" ]; then
+              echo "Checking syntax: $file"
+              sqlcmd -S $DB_SERVER -d master -E -i "$file" -h -1 -W -s "," -n || {
+                echo "❌ Syntax error in $file"
+                exit 1
+              }
+            fi
+          done
+          echo "✅ All SQL files passed syntax validation"
+
+      - name: Validate schema changes
+        if: contains(github.event.pull_request.files.*.name, 'database/schema/')
+        run: |
+          echo "Validating schema consistency..."
+          python3 scripts/validate_schema.py
+
+  test-pr:
+    name: Test PR Changes
+    runs-on: ubuntu-latest
+    needs: validate-pr
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SQL Server Tools
+        uses: microsoft/sqlserver-actions/setup-sqlcmd@v1
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          pip install pytest pytest-cov junit-xml
+
+      - name: Setup test database
+        run: |
+          echo "Setting up test database..."
+          sqlcmd -S $DB_SERVER -E -Q "IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = N'$DB_NAME_TEST') CREATE DATABASE [$DB_NAME_TEST]"
+          cd scripts
+          sqlcmd -S $DB_SERVER -d $DB_NAME_TEST -E -i install_all.sql
+
+      - name: Run unit tests
+        run: |
+          echo "Running unit tests..."
+          python3 tests/run_unit_tests.py --database $DB_NAME_TEST
+
+      - name: Run integration tests
+        run: |
+          echo "Running integration tests..."
+          python3 tests/run_integration_tests.py --database $DB_NAME_TEST
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-test-results
+          path: test-reports/
+          retention-days: 7
+
+      - name: Publish test results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always()
+        with:
+          files: test-reports/*.xml
+
+  cleanup-pr:
+    name: Cleanup PR Resources
+    runs-on: ubuntu-latest
+    needs: [validate-pr, test-pr]
+    if: always()
+    steps:
+      - name: Setup SQL Server Tools
+        uses: microsoft/sqlserver-actions/setup-sqlcmd@v1
+
+      - name: Cleanup test database
+        run: |
+          echo "Cleaning up test database..."
+          sqlcmd -S $DB_SERVER -E -Q "IF EXISTS (SELECT name FROM sys.databases WHERE name = N'$DB_NAME_TEST') DROP DATABASE [$DB_NAME_TEST]" 

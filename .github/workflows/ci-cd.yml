@@ -1,0 +1,403 @@
+name: Model Registry CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop, master ]
+    paths:
+      - 'database/**'
+      - 'scripts/**'
+      - 'tests/**'
+      - 'docs/**'
+      - 'reports/**'
+  pull_request:
+    branches: [ main, develop, master ]
+  release:
+    types: [ published ]
+
+env:
+  # Database connection variables
+  DB_SERVER: ${{ secrets.DB_SERVER || 'localhost' }}
+  DB_NAME_TEST: MODEL_REGISTRY_TEST
+  DB_NAME_STAGING: MODEL_REGISTRY_STAGING
+  DB_NAME_PROD: MODEL_REGISTRY
+  SQLCMD_PATH: sqlcmd
+
+jobs:
+  # ===========================
+  # VALIDATION STAGE
+  # ===========================
+  
+  validate:
+    name: Validate SQL and Schema
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SQL Server Tools
+        uses: microsoft/sqlserver-actions/setup-sqlcmd@v1
+
+      - name: Validate SQL syntax
+        if: contains(github.event.head_commit.modified, 'database/') || contains(github.event.head_commit.added, 'database/')
+        run: |
+          echo "Validating SQL syntax for all scripts..."
+          find database/ -name "*.sql" -type f | while read file; do
+            echo "Checking syntax: $file"
+            # Use sqlcmd with -n option to check syntax without executing
+            sqlcmd -S $DB_SERVER -d master -E -i "$file" -h -1 -W -s "," -n || {
+              echo "Syntax error in $file"
+              exit 1
+            }
+          done
+          echo "All SQL files passed syntax validation"
+
+      - name: Validate schema consistency
+        if: contains(github.event.head_commit.modified, 'database/schema/') || contains(github.event.head_commit.added, 'database/schema/')
+        run: |
+          echo "Validating schema consistency and dependencies..."
+          python3 scripts/validate_schema.py
+
+      - name: Upload validation artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-reports
+          path: test-reports/
+          retention-days: 7
+
+  # ===========================
+  # TEST STAGE
+  # ===========================
+
+  setup-test-database:
+    name: Setup Test Database
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SQL Server Tools
+        uses: microsoft/sqlserver-actions/setup-sqlcmd@v1
+
+      - name: Setup test database
+        run: |
+          echo "Setting up test database..."
+          sqlcmd -S $DB_SERVER -E -Q "IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = N'$DB_NAME_TEST') CREATE DATABASE [$DB_NAME_TEST]"
+          echo "Installing schema to test database..."
+          cd scripts
+          sqlcmd -S $DB_SERVER -d $DB_NAME_TEST -E -i install_all.sql
+
+      - name: Upload setup logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: setup-logs
+          path: logs/
+          retention-days: 1
+
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: setup-test-database
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          pip install pytest pytest-cov junit-xml
+
+      - name: Run unit tests
+        run: |
+          echo "Running unit tests for stored procedures and functions..."
+          python3 tests/run_unit_tests.py --database $DB_NAME_TEST
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results
+          path: test-reports/
+          retention-days: 7
+
+      - name: Publish test results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always()
+        with:
+          files: test-reports/unit-tests.xml
+
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: setup-test-database
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          pip install pytest junit-xml
+
+      - name: Run integration tests
+        run: |
+          echo "Running integration tests..."
+          python3 tests/run_integration_tests.py --database $DB_NAME_TEST
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-results
+          path: test-reports/
+          retention-days: 7
+
+      - name: Publish test results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always()
+        with:
+          files: test-reports/integration-tests.xml
+
+  performance-tests:
+    name: Performance Tests
+    runs-on: ubuntu-latest
+    needs: setup-test-database
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          pip install pytest junit-xml
+
+      - name: Run performance tests
+        run: |
+          echo "Running performance tests..."
+          python3 tests/run_performance_tests.py --database $DB_NAME_TEST
+
+      - name: Upload performance results
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-results
+          path: |
+            test-reports/
+            performance-results/
+          retention-days: 7
+
+      - name: Publish test results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always()
+        with:
+          files: test-reports/performance-tests.xml
+
+  # ===========================
+  # BUILD STAGE
+  # ===========================
+
+  generate-documentation:
+    name: Generate Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          pip install sphinx sphinx-rtd-theme
+
+      - name: Generate documentation
+        run: |
+          echo "Generating documentation..."
+          python3 scripts/generate_docs.py
+          sphinx-build -b html docs/ public/
+
+      - name: Upload documentation
+        uses: actions/upload-artifact@v4
+        with:
+          name: documentation
+          path: public/
+          retention-days: 7
+
+  package-release:
+    name: Package Release
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create release package
+        run: |
+          echo "Creating release package..."
+          VERSION=$(date +%Y%m%d)-$(echo $GITHUB_SHA | cut -c1-8)
+          mkdir -p releases
+          zip -r "releases/model-registry-$VERSION.zip" \
+            database/ \
+            scripts/ \
+            docs/ \
+            reports/ \
+            README.md \
+            -x "*.git*" "tests/*" "logs/*"
+          echo "Package created: releases/model-registry-$VERSION.zip"
+
+      - name: Upload release package
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-package
+          path: releases/
+          retention-days: 30
+
+  # ===========================
+  # DEPLOY STAGE
+  # ===========================
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [unit-tests, integration-tests]
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    environment: staging
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SQL Server Tools
+        uses: microsoft/sqlserver-actions/setup-sqlcmd@v1
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Deploy to staging
+        run: |
+          echo "Deploying to staging environment..."
+          # Create staging database if not exists
+          sqlcmd -S $DB_SERVER -E -Q "IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = N'$DB_NAME_STAGING') CREATE DATABASE [$DB_NAME_STAGING]"
+          
+          # Run deployment script
+          cd scripts
+          sqlcmd -S $DB_SERVER -d $DB_NAME_STAGING -E -i deploy_staging.sql
+          
+          # Run smoke tests
+          python3 ../tests/smoke_tests.py --database $DB_NAME_STAGING
+
+      - name: Deploy to GitHub Pages (staging)
+        uses: peaceiris/actions-gh-pages@v3
+        if: success()
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./public
+          destination_dir: staging
+
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [unit-tests, integration-tests, performance-tests]
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    environment: production
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SQL Server Tools
+        uses: microsoft/sqlserver-actions/setup-sqlcmd@v1
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Deploy to production
+        run: |
+          echo "Deploying to production environment..."
+          # Backup production database
+          echo "Creating backup of production database..."
+          BACKUP_FILE="model_registry_backup_$(date +%Y%m%d_%H%M%S).bak"
+          sqlcmd -S $DB_SERVER -E -Q "BACKUP DATABASE [$DB_NAME_PROD] TO DISK = N'/var/backups/$BACKUP_FILE'"
+          
+          # Run deployment with rollback capability
+          cd scripts
+          sqlcmd -S $DB_SERVER -d $DB_NAME_PROD -E -i deploy_production.sql
+          
+          # Run post-deployment validation
+          python3 ../tests/post_deployment_tests.py --database $DB_NAME_PROD
+
+      - name: Run health checks
+        run: |
+          echo "Running final health checks..."
+          python3 tests/health_check.py --database $DB_NAME_PROD
+
+      - name: Deploy to GitHub Pages (production)
+        uses: peaceiris/actions-gh-pages@v3
+        if: success()
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./public
+
+  # ===========================
+  # NOTIFICATION STAGE
+  # ===========================
+
+  notify-success:
+    name: Notify Success
+    runs-on: ubuntu-latest
+    needs: [deploy-staging, deploy-production]
+    if: success() && (needs.deploy-staging.result == 'success' || needs.deploy-production.result == 'success')
+    steps:
+      - name: Send success notification
+        run: |
+          echo "Sending success notification..."
+          if [ -n "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
+            curl -X POST -H 'Content-type: application/json' \
+              --data "{\"text\":\"✅ Model Registry deployment successful for branch ${{ github.ref_name }} by ${{ github.actor }}\"}" \
+              ${{ secrets.SLACK_WEBHOOK_URL }}
+          fi
+
+  notify-failure:
+    name: Notify Failure
+    runs-on: ubuntu-latest
+    if: failure()
+    steps:
+      - name: Send failure notification
+        run: |
+          echo "Sending failure notification..."
+          if [ -n "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
+            curl -X POST -H 'Content-type: application/json' \
+              --data "{\"text\":\"❌ Model Registry deployment failed for branch ${{ github.ref_name }}. Check workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
+              ${{ secrets.SLACK_WEBHOOK_URL }}
+          fi
+
+  # ===========================
+  # CLEANUP
+  # ===========================
+
+  cleanup:
+    name: Cleanup
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Setup SQL Server Tools
+        uses: microsoft/sqlserver-actions/setup-sqlcmd@v1
+
+      - name: Cleanup test database
+        run: |
+          echo "Cleaning up test database..."
+          sqlcmd -S $DB_SERVER -E -Q "IF EXISTS (SELECT name FROM sys.databases WHERE name = N'$DB_NAME_TEST') DROP DATABASE [$DB_NAME_TEST]" 
