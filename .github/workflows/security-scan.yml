@@ -145,7 +145,7 @@ jobs:
 
       - name: Install SQL security tools
         run: |
-          pip install sqlmap-python
+          pip install sqlmap sqlfluff sqlparse
 
       - name: Scan SQL files for potential vulnerabilities
         run: |
@@ -192,13 +192,15 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Run TruffleHog
         uses: trufflesecurity/trufflehog@main
         with:
           path: .
-          base: ${{ github.event.before }}
-          head: ${{ github.event.after }}
+          base: ${{ github.event.before || 'HEAD~1' }}
+          head: ${{ github.event.after || 'HEAD' }}
           extra_args: --only-verified
 
       - name: Run GitLeaks
@@ -206,7 +208,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          args: --verbose --redact
+          verbose: true
+          redact: true
 
   # ===========================
   # SECURITY SUMMARY
